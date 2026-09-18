@@ -1,2 +1,3 @@
-# agentbase: fetched shared skills live here; generated tool files are committed on purpose
+# agentbase: fetched shared content lives here; generated tool files are committed on purpose
+.rulesync/rules/.curated/
 .rulesync/skills/.curated/

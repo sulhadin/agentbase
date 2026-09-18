@@ -1,11 +1,11 @@
 {
   "$schema": "https://github.com/dyoshikawa/rulesync/releases/latest/download/config-schema.json",
-  // Skills only: rulesync never touches AGENTS.md / CLAUDE.md, each repo keeps its own.
-  // claudecode → .claude/skills/ (Claude Code), codexcli → .agents/skills/ (Cursor, Codex, Antigravity).
-  "targets": ["claudecode", "codexcli"],
-  "features": ["skills"],
+  // Any rulesync target/feature works here; `npx rulesync generate --help` lists them.
+  // With "rules" enabled and several targets writing AGENTS.md, the last target wins — keep codexcli last.
+  "targets": [__TARGETS__],
+  "features": [__FEATURES__],
   "sources": [
     // Bumped automatically by agentbase's sync workflow. Do not edit by hand.
-    { "source": "__ORG__/agentbase", "ref": "__REF__", "skills": ["*"] }
+    { "source": "__ORG__/agentbase", "ref": "__REF__", __SELECTION__ }
   ]
 }

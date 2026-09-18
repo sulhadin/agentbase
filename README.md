@@ -19,8 +19,11 @@ Generated files are committed in consumers on purpose: cloud/background agents a
 ## Adopt in a repo
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/sulhadin/agentbase/main/scripts/adopt.sh) sulhadin
+bash <(curl -fsSL https://raw.githubusercontent.com/sulhadin/agentbase/main/scripts/adopt.sh) sulhadin \
+  [--targets claudecode,codexcli] [--features skills]
 ```
+
+Defaults shown. Any rulesync target or feature is accepted (`npx rulesync generate --help`); a repo can also edit `targets`/`features` in its `rulesync.jsonc` later. With `rules` enabled and several targets writing `AGENTS.md`, the last one wins — keep `codexcli` last.
 
 Imports the repo's existing skills into `.rulesync/skills/`, writes `rulesync.jsonc` pinned to the latest release, adds the gitignore entry, `.claude/settings.json` (marketplace), the drift-check workflow, removes skill-dir symlinks, runs install + generate, adds the topic. Then delete from `.rulesync/skills/` what agentbase already ships, add `templates/codeowners-snippet` to `CODEOWNERS`, commit everything.
 
