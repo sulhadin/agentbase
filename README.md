@@ -8,10 +8,12 @@ Each repo used to carry its own copy of the shared rules, symlinked into `.claud
 
 ## How it works
 
-- `rules/` and `skills/` are pulled into consumers by [rulesync](https://github.com/dyoshikawa/rulesync) (`sources` in `rulesync.jsonc`, pinned by `rulesync.lock`) and rendered into each tool's native files: `CLAUDE.md`, `.claude/rules/`, `.cursor/rules/*.mdc`, `AGENTS.md`, `.agents/`, `.github/copilot-instructions.md`.
+- `rules/` and `skills/` are pulled into consumers by [rulesync](https://github.com/dyoshikawa/rulesync) (`sources` in `rulesync.jsonc`, pinned by `rulesync.lock`) and rendered into each tool's native files: `CLAUDE.md` + `.claude/`, `.cursor/rules/*.mdc` + `.cursor/skills/`, and `AGENTS.md` + `.agents/` (shared by Codex and Antigravity).
 - `.rulesync/subagents/` and `.rulesync/commands/` are Claude-only; they ship as a plugin (`plugins/agentbase/`) from this repo's marketplace.
 - A tag `vX.Y.Z` triggers `sync.yml`: every repo with the `agentbase-consumer` topic gets a `chore/agentbase-sync` PR that bumps the ref and regenerates the files.
 - Consumer CI (`agentbase-check.yml`) regenerates from the lockfile and fails on drift, so generated files can't be hand-edited.
+
+Targets are `claudecode`, `cursor`, `codexcli`, `antigravity-ide` — the tools we use; each shared rule ends up as three generated copies plus its `AGENTS.md` section. Add a target only when a team actually uses the tool.
 
 Generated files are committed in consumers on purpose: cloud/background agents and fresh clones need them without running anything. Only the fetched `.rulesync/**/.curated/` trees are gitignored.
 

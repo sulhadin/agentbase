@@ -1,6 +1,6 @@
 {
   "$schema": "https://github.com/dyoshikawa/rulesync/releases/latest/download/config-schema.json",
-  "targets": ["claudecode", "cursor", "codexcli", "copilot", "antigravity-cli"],
+  "targets": ["claudecode", "cursor", "codexcli", "antigravity-ide"],
   "features": ["rules", "skills"],
   "sources": [
     // Bumped automatically by agentbase's sync workflow. Do not edit by hand.

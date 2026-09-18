@@ -26,7 +26,6 @@ if [ ! -d .rulesync ] && has_legacy_config; then
   # A symlinked root file is a mirror of another tool's file; importing it too would duplicate the root rule.
   [ -L CLAUDE.md ] || npx rulesync@16 import --targets claudecode --features rules,skills || true
   [ -L AGENTS.md ] || npx rulesync@16 import --targets codexcli --features rules,skills || true
-  [ -L .github/copilot-instructions.md ] || npx rulesync@16 import --targets copilot --features rules,skills || true
   npx rulesync@16 import --targets cursor --features rules,skills || true
   [ -d .rulesync ] || { echo "import produced nothing; refusing to overwrite existing config" >&2; exit 1; }
 fi
