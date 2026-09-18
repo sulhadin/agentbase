@@ -1,0 +1,6 @@
+{
+  "extraKnownMarketplaces": {
+    "agentbase": { "source": { "source": "github", "repo": "__ORG__/agentbase" } }
+  },
+  "enabledPlugins": { "agentbase@agentbase": true }
+}

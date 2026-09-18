@@ -1,0 +1,32 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: rules/ must be flat markdown with frontmatter
+        run: |
+          set -e
+          for f in rules/*.md; do
+            head -1 "$f" | grep -qx -- '---' || { echo "::error file=$f::missing frontmatter"; exit 1; }
+            grep -q '^root: *true' "$f" && { echo "::error file=$f::shared rules must not be root rules"; exit 1; } || true
+          done
+          find rules -mindepth 2 -name '*.md' | grep . && { echo "::error::nested rules are ignored by rulesync sources"; exit 1; } || true
+      - name: every skill has SKILL.md with name + description
+        run: |
+          set -e
+          for d in skills/*/; do
+            f="$d/SKILL.md"
+            [ -f "$f" ] || { echo "::error::$d has no SKILL.md"; exit 1; }
+            grep -q '^name:' "$f" && grep -q '^description:' "$f" || { echo "::error file=$f::needs name and description"; exit 1; }
+          done
+      - run: npm run doctor
+      - name: plugin output is up to date
+        run: npm run check

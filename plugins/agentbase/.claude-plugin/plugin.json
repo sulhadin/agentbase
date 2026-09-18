@@ -1,0 +1,5 @@
+{
+  "name": "agentbase",
+  "description": "Org-wide Claude Code subagents, commands and hooks",
+  "version": "0.1.0"
+}
