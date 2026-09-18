@@ -15,26 +15,25 @@ fetch_tpl() {
 
 [ -d .git ] || { echo "run from the consumer repo root" >&2; exit 1; }
 
-has_legacy_config() {
-  for p in CLAUDE.md AGENTS.md .claude/rules .cursor/rules .agents/skills .claude/skills; do
+has_legacy_skills() {
+  for p in .agents/skills .claude/skills .cursor/skills; do
     [ -e "$p" ] && return 0
   done
   return 1
 }
-if [ ! -d .rulesync ] && has_legacy_config; then
-  echo "▸ importing existing tool config into .rulesync/ (review the result, then delete what agentbase already provides)"
-  # A symlinked root file is a mirror of another tool's file; importing it too would duplicate the root rule.
-  [ -L CLAUDE.md ] || npx rulesync@16 import --targets claudecode --features rules,skills || true
-  [ -L AGENTS.md ] || npx rulesync@16 import --targets codexcli --features rules,skills || true
-  npx rulesync@16 import --targets cursor --features rules,skills || true
-  [ -d .rulesync ] || { echo "import produced nothing; refusing to overwrite existing config" >&2; exit 1; }
+if [ ! -d .rulesync ] && has_legacy_skills; then
+  echo "▸ importing existing skills into .rulesync/skills/ (then delete the ones agentbase already ships)"
+  # Symlinked skill dirs mirror another tool's dir; importing them too would duplicate every skill.
+  [ -L .claude/skills ] || npx rulesync@16 import --targets claudecode --features skills || true
+  [ -L .agents/skills ] || npx rulesync@16 import --targets codexcli --features skills || true
+  [ -L .cursor/skills ] || npx rulesync@16 import --targets cursor --features skills || true
 fi
 
 echo "▸ writing rulesync.jsonc (ref=$REF)"
 fetch_tpl rulesync.jsonc | sed -e "s#__ORG__#$ORG#g" -e "s#__REF__#$REF#g" > rulesync.jsonc
 
 echo "▸ .gitignore"
-if ! grep -q '.rulesync/rules/.curated/' .gitignore 2>/dev/null; then
+if ! grep -q '.rulesync/skills/.curated/' .gitignore 2>/dev/null; then
   { [ -f .gitignore ] && [ -n "$(tail -c1 .gitignore)" ] && echo; fetch_tpl gitignore; } >> .gitignore
 fi
 
@@ -50,10 +49,8 @@ echo "▸ CI workflow"
 mkdir -p .github/workflows
 [ -f .github/workflows/agentbase-check.yml ] || fetch_tpl consumer-ci.yml > .github/workflows/agentbase-check.yml
 
-echo "▸ removing symlinks into .agents/ (generated files replace them)"
-find . -maxdepth 1 -type l \( -name CLAUDE.md -o -name AGENTS.md -o -name GEMINI.md \) -exec rm -v {} +
-find .claude .cursor .gemini .codex .github .agents -maxdepth 3 -type l -exec rm -v {} + 2>/dev/null || true
-rm -f GEMINI.md 2>/dev/null && echo "  removed GEMINI.md (antigravity-cli reads AGENTS.md)" || true
+echo "▸ removing skill-dir symlinks (generated dirs replace them; AGENTS.md/CLAUDE.md are left alone)"
+for d in .claude/skills .cursor/skills .agents/skills; do [ -L "$d" ] && rm -v "$d"; done || true
 
 echo "▸ install + generate"
 npx rulesync@16 install
@@ -67,7 +64,7 @@ cat <<MSG
 
 Done. Review and commit:
   - rulesync.jsonc, rulesync.lock, .gitignore, .claude/settings.json, .github/workflows/agentbase-check.yml
-  - .rulesync/            ← repo-specific rules/skills only; delete anything agentbase already ships
+  - .rulesync/skills/     ← repo-specific skills only; delete anything agentbase already ships
   - generated tool files  ← commit them; never edit by hand
 Append templates/codeowners-snippet to CODEOWNERS.
 MSG
