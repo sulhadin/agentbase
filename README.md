@@ -1,43 +1,105 @@
-# agentbase
+<h1 align="center">agentbase</h1>
 
-Shared AI agent skills (plus Claude Code subagents/commands) for every repo in the org, in one place.
+<p align="center">
+  <a href="https://github.com/sulhadin/agentbase/actions/workflows/ci.yml"><img alt="ci" src="https://github.com/sulhadin/agentbase/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/sulhadin/agentbase/releases"><img alt="release" src="https://img.shields.io/github/v/release/sulhadin/agentbase?include_prereleases"></a>
+  <a href="https://github.com/dyoshikawa/rulesync"><img alt="powered by rulesync" src="https://img.shields.io/badge/powered%20by-rulesync-blue"></a>
+</p>
+
+<p align="center">
+One repo for the AI agent skills every repo in the org shares.<br>
+Change it here, tag a release, and a PR lands in every consumer — for Claude Code, Cursor, Codex and Antigravity at once.
+</p>
+
+---
 
 ## Why
 
-Each repo used to carry its own copy of the shared skills, symlinked into `.claude/`, `.cursor/`, `.agents/`… Every change meant editing N repos and opening N PRs by hand. Now you change it here, tag a release, and a PR lands in every consumer.
+Every repo used to carry its own copy of the shared skills, symlinked into `.claude/`, `.cursor/`, `.agents/`. One change → edit *N* repos → open *N* PRs by hand.
 
-## How it works
+agentbase keeps the content in one place and automates the fan-out with [rulesync](https://github.com/dyoshikawa/rulesync):
 
-- `skills/` is pulled into consumers by [rulesync](https://github.com/dyoshikawa/rulesync) (`sources` in `rulesync.jsonc`, pinned by `rulesync.lock`) and written to `.claude/skills/` (Claude Code) and `.agents/skills/` (Cursor, Codex, Antigravity all read it natively). Two copies per skill; Claude Code reads nothing but `.claude/`.
-- Skills only. rulesync never touches `AGENTS.md` / `CLAUDE.md`; each repo keeps writing its own.
-- `.rulesync/subagents/` and `.rulesync/commands/` are Claude-only; they ship as a plugin (`plugins/agentbase/`) from this repo's marketplace.
-- A tag `vX.Y.Z` triggers `sync.yml`: every repo with the `agentbase-consumer` topic gets a `chore/agentbase-sync` PR that bumps the ref and regenerates the files.
-- Consumer CI (`agentbase-check.yml`) regenerates from the lockfile and fails on drift, so generated files can't be hand-edited.
-
-Generated files are committed in consumers on purpose: cloud/background agents and fresh clones need them without running anything. Only the fetched `.rulesync/skills/.curated/` tree is gitignored.
-
-## Adopt in a repo
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/sulhadin/agentbase/main/scripts/adopt.sh) sulhadin \
-  [--targets claudecode,codexcli] [--features skills]
+```
+ agentbase                         consumer repo (× N)
+ ─────────                         ───────────────────
+ skills/            ── tag vX ──▶  rulesync install ──▶ .claude/skills/   ← Claude Code
+                        │                            └▶ .agents/skills/   ← Cursor · Codex · Antigravity
+ .rulesync/         ── plugin ──▶  claude plugin update (subagents, commands)
+                        │
+ sync.yml ──────────────┴────────▶ PR: chore/agentbase-sync
 ```
 
-Defaults shown. Any rulesync target or feature is accepted (`npx rulesync generate --help`); a repo can also edit `targets`/`features` in its `rulesync.jsonc` later. With `rules` enabled and several targets writing `AGENTS.md`, the last one wins — keep `codexcli` last.
+## Quick start
 
-Imports the repo's existing skills into `.rulesync/skills/`, writes `rulesync.jsonc` pinned to the latest release, adds the gitignore entry, `.claude/settings.json` (marketplace), the drift-check workflow, removes skill-dir symlinks, runs install + generate, adds the topic. Then delete from `.rulesync/skills/` what agentbase already ships, add `templates/codeowners-snippet` to `CODEOWNERS`, commit everything.
+**Adopt in a repo** (run from its root):
 
-Repo-specific skills live in `.rulesync/skills/`; a same-named local skill overrides the shared one.
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/sulhadin/agentbase/main/scripts/adopt.sh) sulhadin
+```
 
-## Change shared content
+Then delete from `.rulesync/skills/` anything agentbase already ships, add [`templates/codeowners-snippet`](templates/codeowners-snippet) to `CODEOWNERS`, and commit everything — generated files included.
 
-1. Edit `skills/*/SKILL.md`, `.rulesync/subagents/*.md` or `.rulesync/commands/*.md`; run `npm run plugin` if you touched the last two.
-2. Add a `CHANGELOG.md` entry, merge, tag `vX.Y.Z`, push the tag.
+**Ship a change:**
 
-Don't set `targets` on subagents/commands or they drop out of the plugin.
+```bash
+# edit skills/<name>/SKILL.md  (or .rulesync/subagents|commands + `npm run plugin`)
+# add a CHANGELOG.md entry, merge to main, then:
+git tag v0.2.0 && git push origin v0.2.0
+```
 
-## Setup (once)
+## What lands where
 
-- GitHub App with `contents: write`, `pull_requests: write`, `metadata: read` installed on the org; secrets `AGENTBASE_APP_ID`, `AGENTBASE_APP_PRIVATE_KEY` here.
-- If this repo is private: `AGENTBASE_READ_TOKEN` in consumers' CI, and `export GITHUB_TOKEN=$(gh auth token)` for developers.
-- Team `@sulhadin/platform` for CODEOWNERS.
+| Tool | Reads | Written by |
+|---|---|---|
+| Claude Code | `.claude/skills/` | `claudecode` target |
+| Cursor | `.agents/skills/` (also `.claude/skills/`) | `codexcli` target |
+| Codex | `.agents/skills/` | `codexcli` target |
+| Antigravity | `.agents/skills/` | `codexcli` target |
+| Claude Code (subagents, commands) | plugin `agentbase@agentbase` | this repo's marketplace |
+
+Two copies per skill is the floor: Claude Code reads nothing outside `.claude/`, the other three share `.agents/`.
+
+> [!NOTE]
+> Skills only. rulesync never touches `AGENTS.md` / `CLAUDE.md`; every repo keeps writing its own.
+> Need rules or another tool? `adopt.sh --targets a,b --features skills,rules` accepts anything rulesync does.
+
+## How a release propagates
+
+| Step | Where | What happens |
+|---|---|---|
+| 1 | agentbase | `git push origin vX.Y.Z` |
+| 2 | [`release.yml`](.github/workflows/release.yml) | GitHub release from the matching `CHANGELOG.md` section |
+| 3 | [`sync.yml`](.github/workflows/sync.yml) | every repo with topic `agentbase-consumer`: bump `ref`, `rulesync install --update && generate`, open/update PR `chore/agentbase-sync` |
+| 4 | consumer | review, merge; [`agentbase-check.yml`](templates/consumer-ci.yml) regenerates from `rulesync.lock` and fails on drift |
+
+> [!IMPORTANT]
+> Generated files are **committed** in consumers on purpose — cloud/background agents and fresh clones must see them without running anything. Only `.rulesync/**/.curated/` is gitignored. Don't run `rulesync gitignore`.
+
+## Repo layout
+
+| Path | Purpose |
+|---|---|
+| `skills/<name>/SKILL.md` | shared skills, pulled by consumers via rulesync `sources` |
+| `.rulesync/subagents/`, `.rulesync/commands/` | Claude-only; packaged into `plugins/agentbase/` |
+| `plugins/agentbase/` | generated by `npm run plugin`; CI fails if stale |
+| `.claude-plugin/marketplace.json` | makes this repo a Claude Code marketplace |
+| `templates/` | files `adopt.sh` drops into a consumer |
+| `scripts/adopt.sh` | one-time consumer onboarding |
+
+## Consumer conventions
+
+- Repo-specific skills live in `.rulesync/skills/`; a same-named local skill overrides the shared one.
+- `rulesync.jsonc` and `rulesync.lock` are owned by the platform team (CODEOWNERS); the sync PR is the only thing that should touch `ref`.
+- Never edit generated files by hand — CI will fail and the next sync would overwrite them anyway.
+
+## One-time setup
+
+- [ ] GitHub App with `contents: write`, `pull_requests: write`, `metadata: read`, installed on the org → secrets `AGENTBASE_APP_ID`, `AGENTBASE_APP_PRIVATE_KEY` here
+- [ ] Team `@sulhadin/platform` for CODEOWNERS
+- [ ] If this repo goes private: `AGENTBASE_READ_TOKEN` in consumers' CI, `export GITHUB_TOKEN=$(gh auth token)` for developers
+
+## Gotchas
+
+- Don't set `targets` in subagent/command frontmatter — the plugin target gets filtered out.
+- With `rules` enabled, several targets write `AGENTS.md` and the last one wins; keep `codexcli` last.
+- `rulesync import` handles one target per call; `adopt.sh` loops for you.
