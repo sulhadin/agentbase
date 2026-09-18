@@ -1,7 +1,9 @@
 {
   "$schema": "https://github.com/dyoshikawa/rulesync/releases/latest/download/config-schema.json",
-  "targets": ["claudecode", "codexcli"],
-  // Add "cursor" only if this repo needs glob-scoped .cursor/rules/*.mdc; AGENTS.md already covers Cursor, Codex and Antigravity.
+  // Order matters: both antigravity-ide and codexcli write AGENTS.md and the last one wins.
+  // codexcli inlines every shared rule into it (what Cursor and Codex read); antigravity-ide would leave only the root rule.
+  "targets": ["antigravity-ide", "claudecode", "codexcli"],
+  // Add "cursor" only if this repo needs glob-scoped .cursor/rules/*.mdc.
   "features": ["rules", "skills"],
   "sources": [
     // Bumped automatically by agentbase's sync workflow. Do not edit by hand.

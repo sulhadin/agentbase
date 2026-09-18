@@ -8,12 +8,12 @@ Each repo used to carry its own copy of the shared rules, symlinked into `.claud
 
 ## How it works
 
-- `rules/` and `skills/` are pulled into consumers by [rulesync](https://github.com/dyoshikawa/rulesync) (`sources` in `rulesync.jsonc`, pinned by `rulesync.lock`) and rendered into `AGENTS.md` + `.agents/skills/` (read natively by Cursor, Codex and Antigravity) and `CLAUDE.md` + `.claude/` (Claude Code reads nothing else).
+- `rules/` and `skills/` are pulled into consumers by [rulesync](https://github.com/dyoshikawa/rulesync) (`sources` in `rulesync.jsonc`, pinned by `rulesync.lock`) and rendered into `AGENTS.md` (Cursor, Codex), `.agents/rules/` (Antigravity), `.agents/skills/` (all three) and `CLAUDE.md` + `.claude/` (Claude Code reads nothing else).
 - `.rulesync/subagents/` and `.rulesync/commands/` are Claude-only; they ship as a plugin (`plugins/agentbase/`) from this repo's marketplace.
 - A tag `vX.Y.Z` triggers `sync.yml`: every repo with the `agentbase-consumer` topic gets a `chore/agentbase-sync` PR that bumps the ref and regenerates the files.
 - Consumer CI (`agentbase-check.yml`) regenerates from the lockfile and fails on drift, so generated files can't be hand-edited.
 
-Default targets are `claudecode` and `codexcli`; that is the minimum that reaches all four tools, at two copies per rule and skill. A repo that needs glob-scoped Cursor rules adds `cursor` to its own `rulesync.jsonc`.
+Default targets are `antigravity-ide`, `claudecode`, `codexcli` — in that order, because the last target to write `AGENTS.md` wins and only `codexcli` inlines the shared rules into it. That is the minimum that reaches all four tools: three copies per rule, two per skill. A repo that needs glob-scoped Cursor rules adds `cursor` to its own `rulesync.jsonc`.
 
 Generated files are committed in consumers on purpose: cloud/background agents and fresh clones need them without running anything. Only the fetched `.rulesync/**/.curated/` trees are gitignored.
 
