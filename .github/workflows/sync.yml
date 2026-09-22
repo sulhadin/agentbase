@@ -64,39 +64,69 @@ jobs:
         env: { REF: "${{ inputs.ref }}" }
         run: |
           [[ "$REF" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "::error::invalid ref: $REF"; exit 1; }
+          # The topic is added when the adoption PR opens, so it can precede the merge that adds rulesync.jsonc.
+          if [ ! -f rulesync.jsonc ]; then
+            echo "::notice::${{ matrix.repo }} has no rulesync.jsonc on its default branch yet; skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          cp rulesync.lock "$RUNNER_TEMP/old.lock" 2>/dev/null || true
           old=$(grep -oE '"ref": *"[^"]+"' rulesync.jsonc | head -1 | sed -E 's/.*"([^"]+)"$/\1/')
           echo "old=$old" >> "$GITHUB_OUTPUT"
           sed -i -E '/\/agentbase"/ s/"ref": *"[^"]+"/"ref": "'"$REF"'"/' rulesync.jsonc
           grep -q "\"$REF\"" rulesync.jsonc || { echo "::error::ref not bumped in rulesync.jsonc"; exit 1; }
       - name: Install + generate
+        if: steps.bump.outputs.skip != 'true'
         env: { GITHUB_TOKEN: "${{ steps.app.outputs.token }}" }
         run: |
           npx rulesync@16 install --update
           npx rulesync@16 generate
-      - name: Release notes for PR body
-        id: notes
+      - name: Commit message and PR body
+        id: msg
+        if: steps.bump.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           REF: ${{ inputs.ref }}
           OLD: ${{ steps.bump.outputs.old }}
         run: |
+          changed=$(node -e '
+            const fs = require("fs");
+            const read = (f) => { try { return JSON.parse(fs.readFileSync(f, "utf8")); } catch { return {}; } };
+            const skills = (lock) => Object.fromEntries(Object.values(lock.sources ?? {})
+              .flatMap((s) => Object.entries(s.skills ?? {}).map(([name, v]) => [name, v.integrity])));
+            const before = skills(read(process.argv[1])), after = skills(read("rulesync.lock"));
+            const names = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((n) => before[n] !== after[n]).sort();
+            console.log(names.map((n) => !(n in before) ? `${n} (new)` : !(n in after) ? `${n} (removed)` : n).join(", ") || "none");
+          ' "$RUNNER_TEMP/old.lock")
+          # Release notes are free text, so a fixed heredoc delimiter could end the output early.
+          eof="EOF_$(openssl rand -hex 8)"
           {
-            echo "body<<EOF"
+            echo "title=chore(agentbase): update shared AI agent skills to $REF"
+            echo "commit<<$eof"
+            echo "chore(agentbase): update shared AI agent skills to $REF"
+            echo
+            echo "Bump $GITHUB_REPOSITORY from $OLD to $REF and regenerate."
+            echo
+            echo "Changed skills: $changed"
+            echo "$eof"
+            echo "body<<$eof"
             echo "## Changelog"
             echo "- Bump agentbase \`$OLD\` → \`$REF\`"
+            echo "- Changed skills: $changed"
             echo
             echo "## Description"
             echo "Automated rollout of shared AI agent config. Generated files are regenerated from the new lockfile; do not edit them by hand."
             echo
             gh release view "$REF" --repo "$GITHUB_REPOSITORY" --json body -q .body || true
-            echo "EOF"
+            echo "$eof"
           } >> "$GITHUB_OUTPUT"
       - uses: peter-evans/create-pull-request@v7
+        if: steps.bump.outputs.skip != 'true'
         with:
           token: ${{ steps.app.outputs.token }}
           branch: chore/agentbase-sync
           delete-branch: true
-          commit-message: "chore: bump agentbase to ${{ inputs.ref }}"
-          title: "#0 - Bump agentbase to ${{ inputs.ref }}"
-          body: ${{ steps.notes.outputs.body }}
+          commit-message: ${{ steps.msg.outputs.commit }}
+          title: ${{ steps.msg.outputs.title }}
+          body: ${{ steps.msg.outputs.body }}
           labels: agentbase

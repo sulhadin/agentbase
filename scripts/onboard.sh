@@ -37,6 +37,20 @@ Onboards this repo to agentbase: future agentbase releases arrive here as automa
 EOF
 }
 
+adoption_details() {
+  local targets skills generated
+  targets=$(grep -oE '"targets": *\[[^]]*\]' rulesync.jsonc | grep -oE '"[a-z-]+"' | tr -d '"' | grep -vx targets | paste -sd, - | sed 's/,/, /g')
+  skills=$(node -e 'const l=JSON.parse(require("fs").readFileSync("rulesync.lock","utf8")); console.log(Object.values(l.sources).flatMap(s=>Object.keys(s.skills??{})).join(", "))')
+  generated=$(git diff --cached --name-only | sed -nE 's#^((\.[^/]+/)+skills)/[^/]+/SKILL\.md$#\1/#p' | grep -v '^\.rulesync/' | sort -u | paste -sd, - | sed 's/,/, /g')
+  cat <<EOF
+Pin $OWNER/agentbase $1 in rulesync.jsonc and generate its
+skills for $targets.
+
+Skills: $skills
+Generated: $generated
+EOF
+}
+
 FAILED=()
 for repo in "${REPOS[@]}"; do
   [[ "$repo" == */* ]] || repo="$OWNER/$repo"
@@ -65,9 +79,14 @@ for repo in "${REPOS[@]}"; do
     bash "$ROOT/scripts/adopt.sh" "$OWNER" ${ADOPT_FLAGS[@]+"${ADOPT_FLAGS[@]}"}
     ref=$(grep -oE '"ref": *"[^"]+"' rulesync.jsonc | head -1 | sed -E 's/.*"([^"]+)"$/\1/')
     git add -A
-    git commit -q -m "chore: adopt agentbase $ref"
+    title="chore(agentbase): adopt shared AI agent skills at $ref"
+    git commit -q -F - <<EOF
+$title
+
+$(adoption_details "$ref")
+EOF
     git push -q -u origin "$BRANCH"
-    gh pr create --title "#0 - Adopt agentbase" --body "$(pr_body "$ref")"
+    gh pr create --title "$title" --body "$(pr_body "$ref")"
   )
   status=$?
   set -e
