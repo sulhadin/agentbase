@@ -98,6 +98,12 @@ jobs:
             const names = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((n) => before[n] !== after[n]).sort();
             console.log(names.map((n) => !(n in before) ? `${n} (new)` : !(n in after) ? `${n} (removed)` : n).join(", ") || "none");
           ' "$RUNNER_TEMP/old.lock")
+          # Consumers keep the agentbase-check.yml they were adopted with, so sync is where older ones hear about this.
+          ignored=$(
+            { find . \( -path ./.git -o -path ./.rulesync -o -path ./node_modules \) -prune -o -type f -path '*/skills/*/SKILL.md' -print
+              [ -f .claude/settings.json ] && echo ./.claude/settings.json; } | git check-ignore -v --stdin | grep -Ev '^[^:]*:[0-9]+:!' | cut -f1 | sort -u | paste -sd' ' - || true
+          )
+          [ -z "$ignored" ] || echo "::warning::${{ matrix.repo }}: .gitignore hides generated files ($ignored); they are not committed."
           # Release notes are free text, so a fixed heredoc delimiter could end the output early.
           eof="EOF_$(openssl rand -hex 8)"
           {
@@ -117,6 +123,11 @@ jobs:
             echo "## Description"
             echo "Automated rollout of shared AI agent config. Generated files are regenerated from the new lockfile; do not edit them by hand."
             echo
+            if [ -n "$ignored" ]; then
+              echo "## Before merge"
+              echo "- \`.gitignore\` hides generated files, so this PR cannot commit them: $ignored. Un-ignore them (e.g. replace \`.claude\` with \`.claude/*\`, \`!.claude/skills/\`, \`!.claude/settings.json\`)."
+              echo
+            fi
             gh release view "$REF" --repo "$GITHUB_REPOSITORY" --json body -q .body || true
             echo "$eof"
           } >> "$GITHUB_OUTPUT"
