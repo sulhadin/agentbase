@@ -92,15 +92,20 @@ The workflows' built-in `GITHUB_TOKEN` can only touch `agentbase` itself; this A
 > [!NOTE]
 > Private `agentbase`? Consumers also need a read-only token as the `AGENTBASE_READ_TOKEN` secret for their CI, and developers need `export GITHUB_TOKEN=$(gh auth token)` before running rulesync.
 
-### 4. Make squash merges carry the PR title
+### 4. Cut the first release
 
-Releases are computed from the commits on `main`, so each squash commit must be the (conventional) PR title. In *Settings → General → Pull Requests*, keep *Allow squash merging* on and set its default message to *Pull request title and description* (or *… and commit details*), or:
+Consumers pin a release, so one must exist before step 5. Versions come from [conventional commits](https://www.conventionalcommits.org) on `main`; the template's `Initial commit` doesn't count.
 
-```bash
-gh api -X PATCH repos/<org>/agentbase -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=PR_BODY
-```
-
-The first release is `v1.0.0`. To start at `0.x`, push a baseline tag first: `git tag v0.1.0 && git push origin v0.1.0`.
+1. **Squash merges must carry the PR title.** In *Settings → General → Pull Requests*, keep *Allow squash merging* on and set its default message to *Pull request title and description* (or *… and commit details*), or:
+   ```bash
+   gh api -X PATCH repos/<org>/agentbase -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=PR_BODY
+   ```
+2. **Optional, start at `0.x`** instead of `v1.0.0`: tag the template's first commit.
+   ```bash
+   git tag v0.1.0 "$(git rev-list --max-parents=0 HEAD)" && git push origin v0.1.0
+   ```
+3. **Commit your step 1–2 changes with a `feat` message** (directly or as a squash-merged PR), e.g. `feat(skills): add initial skills`.
+4. **Release:** *Actions → release → Run workflow*, or `gh workflow run release.yml --repo <org>/agentbase`. When it finishes, *Releases* shows `v0.2.0` (or `v1.0.0`). If the run says *nothing to release*, step 3's commit was not `feat`/`fix`.
 
 ### 5. Onboard consumer repos
 
