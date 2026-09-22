@@ -38,6 +38,13 @@ gh repo create <org>/agentbase --template sulhadin/agentbase --public --clone
 
 Keep the name **`agentbase`**; the scripts and workflows address `<org>/agentbase`.
 
+Then make it yours:
+- `.claude-plugin/marketplace.json`: set `owner.name` to your org.
+- `README.md`: point the badge links at `<org>/agentbase`.
+- `CHANGELOG.md`: clear it; your first release writes a fresh one.
+
+Nothing in the repo lists consumer repos. Sync finds them at run time as the repos under the copy's owner with the `agentbase-consumer` topic, so a copy never reaches the original owner's repos.
+
 ### 2. Put your content in
 
 | Put | In | Reaches |
