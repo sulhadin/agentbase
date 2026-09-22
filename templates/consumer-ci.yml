@@ -8,9 +8,10 @@ jobs:
   drift:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22 }
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        # Runs in a consumer checkout: npx needs no install, and v5+ auto-caching fails when a packageManager field has no lockfile.
+        with: { node-version: 22, package-manager-cache: false }
       - name: Regenerate from lockfile and fail on drift
         env:
           GITHUB_TOKEN: ${{ secrets.AGENTBASE_READ_TOKEN || secrets.GITHUB_TOKEN }}

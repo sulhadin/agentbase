@@ -16,7 +16,7 @@ jobs:
     outputs:
       repos: ${{ steps.list.outputs.repos }}
     steps:
-      - uses: actions/create-github-app-token@v1
+      - uses: actions/create-github-app-token@v3
         id: app
         with:
           app-id: ${{ secrets.AGENTBASE_APP_ID }}
@@ -46,19 +46,20 @@ jobs:
       matrix:
         repo: ${{ fromJson(needs.discover.outputs.repos) }}
     steps:
-      - uses: actions/create-github-app-token@v1
+      - uses: actions/create-github-app-token@v3
         id: app
         with:
           app-id: ${{ secrets.AGENTBASE_APP_ID }}
           private-key: ${{ secrets.AGENTBASE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ matrix.repo }},agentbase
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: ${{ github.repository_owner }}/${{ matrix.repo }}
           token: ${{ steps.app.outputs.token }}
-      - uses: actions/setup-node@v4
-        with: { node-version: 22 }
+      - uses: actions/setup-node@v7
+        # Runs in a consumer checkout: npx needs no install, and v5+ auto-caching fails when a packageManager field has no lockfile.
+        with: { node-version: 22, package-manager-cache: false }
       - name: Bump agentbase ref
         id: bump
         env: { REF: "${{ inputs.ref }}" }
@@ -120,7 +121,7 @@ jobs:
             gh release view "$REF" --repo "$GITHUB_REPOSITORY" --json body -q .body || true
             echo "$eof"
           } >> "$GITHUB_OUTPUT"
-      - uses: peter-evans/create-pull-request@v7
+      - uses: peter-evans/create-pull-request@v8
         if: steps.bump.outputs.skip != 'true'
         with:
           token: ${{ steps.app.outputs.token }}
