@@ -6,9 +6,12 @@
   "scripts": {
     "plugin": "rulesync generate --targets claudecode-plugin --features commands,subagents --output-roots ./plugins/agentbase --delete",
     "doctor": "rulesync doctor",
-    "check": "npm run plugin && git diff --exit-code -- plugins/"
+    "check": "npm run plugin && git diff --exit-code -- plugins/",
+    "onboard": "scripts/onboard.sh",
+    "setup": "node scripts/setup.mjs"
   },
   "devDependencies": {
+    "@inquirer/prompts": "^8.7.2",
     "@semantic-release/changelog": "^7.0.0",
     "@semantic-release/exec": "^7.1.0",
     "@semantic-release/git": "^11.0.1",
