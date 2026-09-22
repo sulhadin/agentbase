@@ -47,7 +47,7 @@ if [ ! -d .rulesync ]; then
       claudecode) [ -L CLAUDE.md ] && continue ;;
       codexcli|antigravity-*) [ -L AGENTS.md ] && continue ;;
     esac
-    npx rulesync@16 import --targets "$t" --features "$FEATURES" || true
+    npx --yes rulesync@16 import --targets "$t" --features "$FEATURES" || true
   done
 fi
 
@@ -78,8 +78,8 @@ echo "▸ removing skill-dir symlinks (generated dirs replace them; AGENTS.md/CL
 for d in .claude/skills .cursor/skills .agents/skills; do [ -L "$d" ] && rm -v "$d"; done || true
 
 echo "▸ install + generate"
-npx rulesync@16 install
-npx rulesync@16 generate
+npx --yes rulesync@16 install
+npx --yes rulesync@16 generate
 
 echo "▸ repo topic"
 gh repo edit "$ORG/$(basename "$(git rev-parse --show-toplevel)")" --add-topic agentbase-consumer 2>/dev/null \
