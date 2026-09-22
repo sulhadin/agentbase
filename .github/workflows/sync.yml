@@ -31,7 +31,7 @@ jobs:
           if [ -n "$REPO" ]; then
             repos=$(jq -cn --arg r "$REPO" '[$r]')
           else
-            repos=$(gh repo list "$OWNER" --topic agentbase-consumer --limit 500 --json name -q '[.[].name]' -c)
+            repos=$(gh repo list "$OWNER" --topic agentbase-consumer --limit 500 --json name -q '[.[].name]')
           fi
           echo "repos=$repos" >> "$GITHUB_OUTPUT"
           echo "targets: $repos"
