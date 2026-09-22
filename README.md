@@ -18,7 +18,7 @@ Teams copy the same `SKILL.md` files into every repo, and the copies drift. agen
 ```
  your-org/agentbase                   each consumer repo
  ──────────────────                   ──────────────────
- skills/*/SKILL.md ── release v1.2.0 ──▶ PR "Bump agentbase to v1.2.0"
+ skills/*/SKILL.md ── release v1.2.0 ──▶ PR "chore(agentbase): update shared AI agent skills to v1.2.0"
                                           ├─ .claude/skills/   → Claude Code
                                           └─ .agents/skills/   → Cursor · Codex · Antigravity
  .rulesync/subagents, commands ─────────▶ Claude Code plugin (marketplace)
@@ -39,9 +39,9 @@ gh repo create <org>/agentbase --template sulhadin/agentbase --public --clone
 Keep the name **`agentbase`**; the scripts and workflows address `<org>/agentbase`.
 
 Then make it yours:
-- `.claude-plugin/marketplace.json`: set `owner.name` to your org.
-- `README.md`: point the badge links at `<org>/agentbase`.
-- `CHANGELOG.md`: clear it; your first release writes a fresh one.
+- `.claude-plugin/marketplace.json`: change `"owner": { "name": "sulhadin" }` to your org.
+- `README.md`: in the first two badge links, replace `sulhadin/agentbase` with `<org>/agentbase`.
+- `CHANGELOG.md`: delete it; your first release writes a fresh one.
 
 Nothing in the repo lists consumer repos. Sync finds them at run time as the repos under the copy's owner with the `agentbase-consumer` topic, so a copy never reaches the original owner's repos.
 
@@ -53,27 +53,48 @@ Nothing in the repo lists consumer repos. Sync finds them at run time as the rep
 | Subagents | `.rulesync/subagents/<name>.md` | Claude Code |
 | Slash commands | `.rulesync/commands/<name>.md` | Claude Code |
 
-Replace the example skills. After touching `.rulesync/`, run `npm install && npm run plugin` and commit `plugins/`; CI fails if it is stale.
+A skill is a folder with one `SKILL.md`: YAML frontmatter, then the instructions in Markdown.
 
-In `templates/codeowners-snippet`, keep `@__ORG__` for a personal account; for an org, use a team, e.g. `@__ORG__/platform`.
+```markdown
+---
+name: api-design
+description: REST conventions for this org. Use when adding or changing an HTTP endpoint.
+---
+1. Plural nouns for collections: `/users`, `/users/{id}`.
+2. ...
+```
+
+`name` must match the folder name; `description` tells the agent when to load it. Replace the example skills in `skills/` with yours.
+
+Subagents and commands are packaged into a Claude Code plugin: after touching `.rulesync/`, run `npm install && npm run plugin` and commit the regenerated `plugins/` folder (CI fails if it is stale).
 
 ### 3. Create the GitHub App that opens the PRs
 
-1. **Settings → Developer settings → GitHub Apps → New.** No webhook. Permissions: *Contents* read & write, *Pull requests* read & write, *Metadata* read.
-2. Install it on the org, on `agentbase` plus every repo that will consume it (or all repos).
-3. Generate a private key, then in `<org>/agentbase`:
+The workflows' built-in `GITHUB_TOKEN` can only touch `agentbase` itself; this App is the bot identity that opens PRs in the other repos.
+
+1. **Create it.** Org: *Org settings → Developer settings → GitHub Apps → New GitHub App*. Personal account: *Settings → Developer settings → GitHub Apps → New GitHub App*.
+   - **GitHub App name:** anything unique on GitHub, e.g. `<org>-agentbase`. It is the bot's display name and can be renamed later.
+   - **Homepage URL:** required; `https://github.com/<org>/agentbase` is fine.
+   - **Webhook:** untick *Active*.
+   - **Repository permissions:** *Contents* → Read and write, *Pull requests* → Read and write. *Metadata* → Read-only is added automatically.
+   - **Where can this GitHub App be installed?** *Only on this account*.
+   - Click **Create GitHub App**.
+2. **Copy the App ID.** It is on the App's *General* page under *About*, a number like `1234567`. Not the *Client ID* (`Iv23li…`).
+3. **Generate a private key.** Same page, bottom, *Private keys → Generate a private key*; a `.pem` file downloads.
+4. **Store both as secrets** of `<org>/agentbase`, then delete the `.pem`:
    ```bash
-   gh secret set AGENTBASE_APP_ID --body <app-id>
-   gh secret set AGENTBASE_APP_PRIVATE_KEY < key.pem
+   gh secret set AGENTBASE_APP_ID --repo <org>/agentbase --body 1234567
+   gh secret set AGENTBASE_APP_PRIVATE_KEY --repo <org>/agentbase < path/to/the-downloaded.private-key.pem
    ```
-4. If `main` is protected, add the App to the bypass list; it pushes the release commit and tag.
+5. **Install it.** Creating the App does not install it. On the App's page choose *Install App* in the left menu → *Install* next to your org → pick *All repositories*, or *Only select repositories* including `agentbase` and every repo that will consume it. Skipping this makes every workflow run fail with `Not Found … get-a-user-installation`.
+6. If `main` has a branch protection rule or ruleset (*Settings → Rules* / *Branches*), add the App to its bypass list; it pushes the release commit and tag.
 
 > [!NOTE]
 > Private `agentbase`? Consumers also need a read-only token as the `AGENTBASE_READ_TOKEN` secret for their CI, and developers need `export GITHUB_TOKEN=$(gh auth token)` before running rulesync.
 
 ### 4. Make squash merges carry the PR title
 
-Releases are computed from the commits on `main`, so each squash commit must be the (conventional) PR title:
+Releases are computed from the commits on `main`, so each squash commit must be the (conventional) PR title. In *Settings → General → Pull Requests*, keep *Allow squash merging* on and set its default message to *Pull request title and description* (or *… and commit details*), or:
 
 ```bash
 gh api -X PATCH repos/<org>/agentbase -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=PR_BODY
@@ -90,13 +111,45 @@ npm install
 npm run setup
 ```
 
-Pick the repos, then the agents (Claude Code, Codex, Cursor, Antigravity, Copilot, …), confirm. Agents that read the same folder share one copy. Non-interactive: `npm run onboard -- repo-a repo-b --targets claudecode,codexcli`.
+Pick the repos, then the agents, confirm. Only pick agents your team uses: every one adds a committed copy of each skill.
 
-For each repo it clones, runs [`adopt.sh`](scripts/adopt.sh) on a `chore/adopt-agentbase` branch and opens a PR. `adopt.sh` pins the latest release, imports skills the repo already has, generates the tool folders, adds a drift-check workflow and the Claude plugin, and tags the repo `agentbase-consumer`. Repos already adopted, or with an open adoption PR, are skipped.
+| Agent | `--targets` value | Folder |
+|---|---|---|
+| Claude Code | `claudecode` | `.claude/skills/` |
+| Codex, Cursor, Antigravity | `codexcli` (one shared copy) | `.agents/skills/` |
+| GitHub Copilot | `copilot` | `.github/skills/` |
+| OpenCode, Cline, Roo Code, Kiro, Junie, Warp, Qwen Code, Augment | `opencode`, `cline`, `roo`, `kiro`, `junie`, `warp`, `qwencode`, `augmentcode` | `.<tool>/skills/` |
 
-Before merging each PR, delete from `.rulesync/skills/` anything agentbase now ships and re-run `npx rulesync@16 generate`.
+Non-interactive: `npm run onboard -- web api --targets claudecode,codexcli`. Repos are names under the agentbase owner, or `owner/name`.
+
+For each repo it clones, runs [`adopt.sh`](scripts/adopt.sh) on a `chore/adopt-agentbase` branch and opens a PR. Repos already adopted, or with an open adoption PR, are skipped. The PR adds:
+
+- `rulesync.jsonc` (agentbase version + chosen agents) and `rulesync.lock` (exact content hashes),
+- the generated skill folders from the table above,
+- `.github/workflows/agentbase-check.yml`, which fails if the generated files drift from what the lock produces (e.g. someone hand-edited them),
+- `.claude/settings.json` enabling the agentbase Claude Code plugin.
+
+It also adds the `agentbase-consumer` topic to the repo; that topic is how releases find it, so don't add it by hand.
+
+If the repo already had its own skills, `adopt.sh` imports them into `.rulesync/skills/`. Before merging, delete from there any that agentbase now ships (same name) and run `npx rulesync@16 generate`; if the folder is empty, there is nothing to do.
 
 `onboard` also takes `--features skills,rules` (any rulesync value works). To adopt by hand instead, run `bash <(curl -fsSL https://raw.githubusercontent.com/<org>/agentbase/main/scripts/adopt.sh) <org>` from the repo root.
+
+> [!WARNING]
+> If a consumer's `.gitignore` ignores a generated folder, that agent's skills are silently never committed and the drift check cannot notice. A bare `.claude` line is the usual culprit. In the repo, run `git check-ignore -v .claude/skills .claude/settings.json .agents/skills`; no output means fine. Otherwise replace the matching line, e.g. `.claude` with:
+> ```gitignore
+> .claude/*
+> !.claude/skills/
+> !.claude/settings.json
+> ```
+
+**Check it works.** After merging the adoption PRs, roll the latest release out by hand:
+
+```bash
+gh workflow run sync.yml --repo <org>/agentbase -f ref=$(gh release view --repo <org>/agentbase --json tagName -q .tagName)
+```
+
+The *sync consumers* run should list your repos under `rollout`. A repo whose adoption PR is not merged yet is skipped with a notice. Once a release actually changes a skill, each consumer gets a `chore(agentbase): update shared AI agent skills to vX.Y.Z` PR listing the changed skills.
 
 That's it. From now on, every release opens a PR in every consumer repo.
 
@@ -121,7 +174,7 @@ That's it. From now on, every release opens a PR in every consumer repo.
 | [`sync.yml`](.github/workflows/sync.yml) | PR `chore/agentbase-sync` in every repo with topic `agentbase-consumer` |
 | consumer CI | [`agentbase-check.yml`](templates/consumer-ci.yml) regenerates from `rulesync.lock` and fails on drift |
 
-**Roll out to one repo only:** *Actions → sync consumers → Run workflow*, set `repo`.
+**Roll out to one repo only:** *Actions → sync consumers → Run workflow*, set `ref` to a tag (e.g. `v1.2.0`) and `repo` to the repo name (e.g. `web`).
 
 **In a consumer repo:**
 - A local skill in `.rulesync/skills/` with the same name overrides the shared one.
