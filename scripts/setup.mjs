@@ -27,11 +27,27 @@ const ask = (prompt) =>
   });
 
 const gh = (...args) => execFileSync('gh', args, { encoding: 'utf8' }).trim();
+const hasRulesyncConfig = (repo) => {
+  try {
+    execFileSync('gh', ['api', `repos/${owner}/${repo}/contents/rulesync.jsonc`], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const owner = gh('repo', 'view', '--json', 'owner', '-q', '.owner.login');
 const repos = JSON.parse(
   gh('repo', 'list', owner, '--limit', '500', '--no-archived', '--json', 'name,isPrivate,repositoryTopics'),
 ).filter((r) => r.name !== 'agentbase');
+
+// The topic is added when the adoption PR opens, so it also marks repos whose PR was closed unmerged.
+const adopted = new Set(
+  repos
+    .filter((r) => (r.repositoryTopics ?? []).some((t) => t.name === 'agentbase-consumer'))
+    .filter((r) => hasRulesyncConfig(r.name))
+    .map((r) => r.name),
+);
 
 const selectedRepos = await ask(checkbox({
   message: `Repos to adopt agentbase in (${owner})`,
@@ -39,11 +55,10 @@ const selectedRepos = await ask(checkbox({
   loop: false,
   required: true,
   choices: repos.map((r) => {
-    const adopted = (r.repositoryTopics ?? []).some((t) => t.name === 'agentbase-consumer');
     return {
       name: `${r.name}${r.isPrivate ? '  (private)' : ''}`,
       value: r.name,
-      disabled: adopted && 'already adopted',
+      disabled: adopted.has(r.name) && 'already adopted',
     };
   }),
 }));

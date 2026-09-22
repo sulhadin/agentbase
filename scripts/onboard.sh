@@ -85,7 +85,8 @@ $title
 
 $(adoption_details "$ref")
 EOF
-    git push -q -u origin "$BRANCH"
+    # Open PRs were skipped above, so a remote branch here is left over from a closed one.
+    git push -q -u --force origin "$BRANCH"
     gh pr create --title "$title" --body "$(pr_body "$ref")"
   )
   status=$?
