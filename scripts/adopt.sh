@@ -81,6 +81,19 @@ echo "▸ install + generate"
 npx --yes rulesync@16 install
 npx --yes rulesync@16 generate
 
+echo "▸ checking .gitignore does not hide generated files"
+# check-ignore -v also reports `!` rules that re-include a file, which are not a problem.
+ignored=$(
+  { find . \( -path ./.git -o -path ./.rulesync -o -path ./node_modules \) -prune -o -type f -path '*/skills/*/SKILL.md' -print
+    [ -f .claude/settings.json ] && echo ./.claude/settings.json; } | git check-ignore -v --stdin | grep -Ev '^[^:]*:[0-9]+:!' || true
+)
+if [ -n "$ignored" ]; then
+  echo "✗ these .gitignore rules hide generated files, so they would never be committed:" >&2
+  echo "$ignored" | cut -f1 | sort -u | sed 's/^/    /' >&2
+  echo "  Un-ignore them (e.g. replace '.claude' with '.claude/*', '!.claude/skills/', '!.claude/settings.json') and re-run." >&2
+  exit 1
+fi
+
 echo "▸ repo topic"
 gh repo edit "$ORG/$(basename "$(git rev-parse --show-toplevel)")" --add-topic agentbase-consumer 2>/dev/null \
   || echo "  add the GitHub topic 'agentbase-consumer' manually (gh not authenticated)"
