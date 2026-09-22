@@ -1,11 +1,11 @@
 {
   "name": "agentbase",
-  "owner": { "name": "Platform team" },
+  "owner": { "name": "sulhadin" },
   "plugins": [
     {
       "name": "agentbase",
       "source": "./plugins/agentbase",
-      "description": "Org-wide Claude Code subagents, commands and hooks"
+      "description": "Shared Claude Code subagents and commands"
     }
   ]
 }
