@@ -6,7 +6,8 @@
   "scripts": {
     "plugin": "rulesync generate --targets claudecode-plugin --features commands,subagents --output-roots ./plugins/agentbase --delete",
     "doctor": "rulesync doctor",
-    "check": "npm run plugin && git diff --exit-code -- plugins/"
+    "check": "npm run plugin && git diff --exit-code -- plugins/",
+    "onboard": "scripts/onboard.sh"
   },
   "devDependencies": {
     "@semantic-release/changelog": "^7.0.0",

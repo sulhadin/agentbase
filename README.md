@@ -74,21 +74,19 @@ gh api -X PATCH repos/<org>/agentbase -f squash_merge_commit_title=PR_TITLE -f s
 
 The first release is `v1.0.0`. To start at `0.x`, push a baseline tag first: `git tag v0.1.0 && git push origin v0.1.0`.
 
-### 5. Onboard each consumer repo
+### 5. Onboard consumer repos
 
-From the consumer repo's root:
+First give the GitHub App access to them (*Settings → Applications → your App → Configure → Repository access*). Then, from your `agentbase` clone:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/<org>/agentbase/main/scripts/adopt.sh) <org>
+npm run onboard -- repo-a repo-b
 ```
 
-It pins the latest release, imports skills the repo already has, generates the tool folders, adds a drift-check workflow and the Claude plugin, and tags the repo `agentbase-consumer`. Then:
+For each repo it clones, runs [`adopt.sh`](scripts/adopt.sh) on a `chore/adopt-agentbase` branch and opens a PR. `adopt.sh` pins the latest release, imports skills the repo already has, generates the tool folders, adds a drift-check workflow and the Claude plugin, and tags the repo `agentbase-consumer`. Repos already adopted, or with an open adoption PR, are skipped.
 
-- delete from `.rulesync/skills/` anything agentbase now ships (keep repo-specific ones),
-- append the CODEOWNERS lines it prints,
-- commit everything, generated files included.
+Before merging each PR, delete from `.rulesync/skills/` anything agentbase now ships and re-run `npx rulesync@16 generate`.
 
-Other tools or features: `--targets cursor,claudecode --features skills,rules` (any rulesync value works).
+Other tools or features: `--targets cursor,claudecode --features skills,rules` (any rulesync value works). To adopt by hand instead, run `bash <(curl -fsSL https://raw.githubusercontent.com/<org>/agentbase/main/scripts/adopt.sh) <org>` from the repo root.
 
 That's it. From now on, every release opens a PR in every consumer repo.
 
