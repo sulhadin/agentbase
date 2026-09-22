@@ -7,98 +7,108 @@
 </p>
 
 <p align="center">
-One repo for the AI agent skills every repo in the org shares.<br>
-Change it here, tag a release, and a PR lands in every consumer — for Claude Code, Cursor, Codex and Antigravity at once.
+<b>Write your AI agent skills once. Every repo gets them as a PR.</b><br>
+Claude Code · Cursor · Codex · Antigravity
 </p>
 
 ---
 
-## Why
-
-Every repo used to carry its own copy of the shared skills, symlinked into `.claude/`, `.cursor/`, `.agents/`. One change → edit *N* repos → open *N* PRs by hand.
-
-agentbase keeps the content in one place and automates the fan-out with [rulesync](https://github.com/dyoshikawa/rulesync):
+Teams copy the same `SKILL.md` files into every repo, and the copies drift. agentbase keeps them in **one repo**. Tag a release, and each consumer repo gets a pull request with the new version, generated for every AI tool it uses.
 
 ```
- agentbase                         consumer repo (× N)
- ─────────                         ───────────────────
- skills/            ── tag vX ──▶  rulesync install ──▶ .claude/skills/   ← Claude Code
-                        │                            └▶ .agents/skills/   ← Cursor · Codex · Antigravity
- .rulesync/         ── plugin ──▶  claude plugin update (subagents, commands)
-                        │
- sync.yml ──────────────┴────────▶ PR: chore/agentbase-sync
+ your-org/agentbase                   each consumer repo
+ ──────────────────                   ──────────────────
+ skills/*/SKILL.md ── git tag v1.2.0 ──▶ PR "Bump agentbase to v1.2.0"
+                                          ├─ .claude/skills/   → Claude Code
+                                          └─ .agents/skills/   → Cursor · Codex · Antigravity
+ .rulesync/subagents, commands ─────────▶ Claude Code plugin (marketplace)
 ```
 
-## Quick start
+It is not an npm package. Consumers pin a git tag of this repo, and [rulesync](https://github.com/dyoshikawa/rulesync) fetches and converts it. Generated files are committed, so every clone and cloud agent sees them without a build step.
 
-**Adopt in a repo** (run from its root):
+## Set it up for your org
+
+You need: `gh` (logged in), Node 22+, and admin rights on the org.
+
+### 1. Create your copy
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/sulhadin/agentbase/main/scripts/adopt.sh) sulhadin
+gh repo create <org>/agentbase --template sulhadin/agentbase --public --clone
 ```
 
-Then delete from `.rulesync/skills/` anything agentbase already ships, append the `CODEOWNERS` lines it prints, and commit everything — generated files included.
+Keep the name **`agentbase`**; the scripts and workflows address `<org>/agentbase`.
 
-**Ship a change:**
+### 2. Put your content in
 
-```bash
-# edit skills/<name>/SKILL.md  (or .rulesync/subagents|commands + `npm run plugin`)
-# add a CHANGELOG.md entry, merge to main, then:
-git tag v0.2.0 && git push origin v0.2.0
-```
-
-## What lands where
-
-| Tool | Reads | Written by |
+| Put | In | Reaches |
 |---|---|---|
-| Claude Code | `.claude/skills/` | `claudecode` target |
-| Cursor | `.agents/skills/` (also `.claude/skills/`) | `codexcli` target |
-| Codex | `.agents/skills/` | `codexcli` target |
-| Antigravity | `.agents/skills/` | `codexcli` target |
-| Claude Code (subagents, commands) | plugin `agentbase@agentbase` | this repo's marketplace |
+| Skills | `skills/<name>/SKILL.md` (frontmatter `name` + `description`) | every tool |
+| Subagents | `.rulesync/subagents/<name>.md` | Claude Code |
+| Slash commands | `.rulesync/commands/<name>.md` | Claude Code |
 
-Two copies per skill is the floor: Claude Code reads nothing outside `.claude/`, the other three share `.agents/`.
+Replace the example skills. After touching `.rulesync/`, run `npm install && npm run plugin` and commit `plugins/`; CI fails if it is stale.
+
+In `templates/codeowners-snippet`, keep `@__ORG__` for a personal account; for an org, use a team, e.g. `@__ORG__/platform`.
+
+### 3. Create the GitHub App that opens the PRs
+
+1. **Settings → Developer settings → GitHub Apps → New.** No webhook. Permissions: *Contents* read & write, *Pull requests* read & write, *Metadata* read.
+2. Install it on the org, on `agentbase` plus every repo that will consume it (or all repos).
+3. Generate a private key, then in `<org>/agentbase`:
+   ```bash
+   gh secret set AGENTBASE_APP_ID --body <app-id>
+   gh secret set AGENTBASE_APP_PRIVATE_KEY < key.pem
+   ```
 
 > [!NOTE]
-> Skills only. rulesync never touches `AGENTS.md` / `CLAUDE.md`; every repo keeps writing its own.
-> Need rules or another tool? `adopt.sh --targets a,b --features skills,rules` accepts anything rulesync does.
+> Private `agentbase`? Consumers also need a read-only token as the `AGENTBASE_READ_TOKEN` secret for their CI, and developers need `export GITHUB_TOKEN=$(gh auth token)` before running rulesync.
 
-## How a release propagates
+### 4. Cut the first release
 
-| Step | Where | What happens |
-|---|---|---|
-| 1 | agentbase | `git push origin vX.Y.Z` |
-| 2 | [`release.yml`](.github/workflows/release.yml) | GitHub release from the matching `CHANGELOG.md` section |
-| 3 | [`sync.yml`](.github/workflows/sync.yml) | every repo with topic `agentbase-consumer`: bump `ref`, `rulesync install --update && generate`, open/update PR `chore/agentbase-sync` |
-| 4 | consumer | review, merge; [`agentbase-check.yml`](templates/consumer-ci.yml) regenerates from `rulesync.lock` and fails on drift |
+Add a `## 0.1.0` section to `CHANGELOG.md`, merge to `main`, then:
 
-> [!IMPORTANT]
-> Generated files are **committed** in consumers on purpose — cloud/background agents and fresh clones must see them without running anything. Only `.rulesync/**/.curated/` is gitignored. Don't run `rulesync gitignore`.
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
 
-## Repo layout
+### 5. Onboard each consumer repo
 
-| Path | Purpose |
+From the consumer repo's root:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/<org>/agentbase/main/scripts/adopt.sh) <org>
+```
+
+It pins the latest release, imports skills the repo already has, generates the tool folders, adds a drift-check workflow and the Claude plugin, and tags the repo `agentbase-consumer`. Then:
+
+- delete from `.rulesync/skills/` anything agentbase now ships (keep repo-specific ones),
+- append the CODEOWNERS lines it prints,
+- commit everything, generated files included.
+
+Other tools or features: `--targets cursor,claudecode --features skills,rules` (any rulesync value works).
+
+That's it. From now on, every tag you push opens a PR in every consumer repo.
+
+## Day to day
+
+**Change a skill:** edit, add a `CHANGELOG.md` entry, merge, `git tag vX.Y.Z && git push origin vX.Y.Z`.
+
+| Step | What happens |
 |---|---|
-| `skills/<name>/SKILL.md` | shared skills, pulled by consumers via rulesync `sources` |
-| `.rulesync/subagents/`, `.rulesync/commands/` | Claude-only; packaged into `plugins/agentbase/` |
-| `plugins/agentbase/` | generated by `npm run plugin`; CI fails if stale |
-| `.claude-plugin/marketplace.json` | makes this repo a Claude Code marketplace |
-| `templates/` | files `adopt.sh` drops into a consumer |
-| `scripts/adopt.sh` | one-time consumer onboarding |
+| [`release.yml`](.github/workflows/release.yml) | GitHub release from the matching changelog section |
+| [`sync.yml`](.github/workflows/sync.yml) | PR `chore/agentbase-sync` in every repo with topic `agentbase-consumer` |
+| consumer CI | [`agentbase-check.yml`](templates/consumer-ci.yml) regenerates from `rulesync.lock` and fails on drift |
 
-## Consumer conventions
+**Roll out to one repo only:** *Actions → sync consumers → Run workflow*, set `repo`.
 
-- Repo-specific skills live in `.rulesync/skills/`; a same-named local skill overrides the shared one.
-- `rulesync.jsonc` and `rulesync.lock` are owned by `@sulhadin` (CODEOWNERS); the sync PR is the only thing that should touch `ref`.
-- Never edit generated files by hand — CI will fail and the next sync would overwrite them anyway.
-
-## One-time setup
-
-- [ ] GitHub App with `contents: write`, `pull_requests: write`, `metadata: read`, installed on the `sulhadin` account (all consumer repos + agentbase) → secrets `AGENTBASE_APP_ID`, `AGENTBASE_APP_PRIVATE_KEY` here
-- [ ] If this repo goes private: `AGENTBASE_READ_TOKEN` in consumers' CI, `export GITHUB_TOKEN=$(gh auth token)` for developers
+**In a consumer repo:**
+- A local skill in `.rulesync/skills/` with the same name overrides the shared one.
+- Never hand-edit generated files; CI rejects it and the next sync overwrites it.
+- `AGENTS.md` / `CLAUDE.md` stay yours; skills-only mode never touches them.
 
 ## Gotchas
 
-- Don't set `targets` in subagent/command frontmatter — the plugin target gets filtered out.
-- With `rules` enabled, several targets write `AGENTS.md` and the last one wins; keep `codexcli` last.
-- `rulesync import` handles one target per call; `adopt.sh` loops for you.
+- Don't run `rulesync gitignore` in consumers; it would ignore the files that are committed on purpose.
+- Don't set `targets` in subagent/command frontmatter; the plugin target gets filtered out.
+- With `rules` enabled, several targets write `AGENTS.md` and the last wins; keep `codexcli` last.
+- A personal account can't approve its own PRs, so "Require review from Code Owners" blocks your own edits to `rulesync.jsonc`.
