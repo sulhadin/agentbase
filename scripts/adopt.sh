@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# One-time onboarding of a consumer repo. Run from the consumer repo root:
-#   bash <(curl -fsSL https://raw.githubusercontent.com/<org>/agentbase/main/scripts/adopt.sh) <org> [ref] \
-#        [--targets claudecode,codexcli] [--features skills]
-# Any rulesync target/feature is accepted (`npx rulesync generate --help`).
-# With a local clone of agentbase: AGENTBASE_DIR=../agentbase scripts/adopt.sh <org> [ref]
 set -euo pipefail
+
+# Kept in a variable rather than read back from $0: under `bash <(curl ...)` $0 is an already-drained pipe.
+USAGE='One-time onboarding of a consumer repo. Run from the consumer repo root:
+  bash <(curl -fsSL https://raw.githubusercontent.com/<owner>/agentbase/main/scripts/adopt.sh) <owner> [ref] \
+       [--targets claudecode,codexcli] [--features skills]
+Any rulesync target/feature is accepted (`npx rulesync generate --help`).
+With a local clone of agentbase: AGENTBASE_DIR=../agentbase scripts/adopt.sh <owner> [ref]'
 
 TARGETS="claudecode,codexcli"
 FEATURES="skills"
@@ -15,12 +17,12 @@ while [ $# -gt 0 ]; do
     --features) FEATURES="$2"; shift 2 ;;
     --targets=*)  TARGETS="${1#*=}"; shift ;;
     --features=*) FEATURES="${1#*=}"; shift ;;
-    -h|--help) sed -n '2,6p' "$0"; exit 0 ;;
+    -h|--help) echo "$USAGE"; exit 0 ;;
     *) POS+=("$1"); shift ;;
   esac
 done
 set -- "${POS[@]:-}"
-ORG="${1:?usage: adopt.sh <org> [ref] [--targets a,b] [--features skills,rules]}"
+ORG="${1:?usage: adopt.sh <owner> [ref] [--targets a,b] [--features skills,rules]}"
 REF="${2:-$(gh release view --repo "$ORG/agentbase" --json tagName -q .tagName 2>/dev/null || echo main)}"
 
 json_list() { printf '"%s"' "${1//,/\", \"}"; }
@@ -89,5 +91,6 @@ Done. Review and commit:
   - rulesync.jsonc, rulesync.lock, .gitignore, .claude/settings.json, .github/workflows/agentbase-check.yml
   - .rulesync/skills/     ← repo-specific skills only; delete anything agentbase already ships
   - generated tool files  ← commit them; never edit by hand
-Append templates/codeowners-snippet to CODEOWNERS.
+Append to CODEOWNERS:
 MSG
+fetch_tpl codeowners-snippet | sed "s#__ORG__#$ORG#g"

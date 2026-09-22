@@ -1,3 +1,3 @@
-# agentbase: shared AI config is managed by the platform team
-rulesync.jsonc  @__ORG__/platform
-rulesync.lock   @__ORG__/platform
+# agentbase: shared AI config is owned by the agentbase maintainer
+rulesync.jsonc  @__ORG__
+rulesync.lock   @__ORG__

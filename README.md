@@ -37,7 +37,7 @@ agentbase keeps the content in one place and automates the fan-out with [rulesyn
 bash <(curl -fsSL https://raw.githubusercontent.com/sulhadin/agentbase/main/scripts/adopt.sh) sulhadin
 ```
 
-Then delete from `.rulesync/skills/` anything agentbase already ships, add [`templates/codeowners-snippet`](templates/codeowners-snippet) to `CODEOWNERS`, and commit everything — generated files included.
+Then delete from `.rulesync/skills/` anything agentbase already ships, append the `CODEOWNERS` lines it prints, and commit everything — generated files included.
 
 **Ship a change:**
 
@@ -89,13 +89,12 @@ Two copies per skill is the floor: Claude Code reads nothing outside `.claude/`,
 ## Consumer conventions
 
 - Repo-specific skills live in `.rulesync/skills/`; a same-named local skill overrides the shared one.
-- `rulesync.jsonc` and `rulesync.lock` are owned by the platform team (CODEOWNERS); the sync PR is the only thing that should touch `ref`.
+- `rulesync.jsonc` and `rulesync.lock` are owned by `@sulhadin` (CODEOWNERS); the sync PR is the only thing that should touch `ref`.
 - Never edit generated files by hand — CI will fail and the next sync would overwrite them anyway.
 
 ## One-time setup
 
-- [ ] GitHub App with `contents: write`, `pull_requests: write`, `metadata: read`, installed on the org → secrets `AGENTBASE_APP_ID`, `AGENTBASE_APP_PRIVATE_KEY` here
-- [ ] Team `@sulhadin/platform` for CODEOWNERS
+- [ ] GitHub App with `contents: write`, `pull_requests: write`, `metadata: read`, installed on the `sulhadin` account (all consumer repos + agentbase) → secrets `AGENTBASE_APP_ID`, `AGENTBASE_APP_PRIVATE_KEY` here
 - [ ] If this repo goes private: `AGENTBASE_READ_TOKEN` in consumers' CI, `export GITHUB_TOKEN=$(gh auth token)` for developers
 
 ## Gotchas
