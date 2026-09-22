@@ -9,8 +9,8 @@ jobs:
     steps:
       - env: { TITLE: "${{ github.event.pull_request.title }}" }
         run: |
-          re='^(#[A-Za-z0-9]+ - )?(feat|fix|perf|revert|refactor|docs|chore|ci|build|test|style)(\([^)]+\))?!?: .+'
+          re='^(feat|fix|perf|revert|refactor|docs|chore|ci|build|test|style)(\([^)]+\))?!?: .+'
           [[ "$TITLE" =~ $re ]] || {
-            echo "::error::PR title must be a conventional commit, e.g. 'feat(skills): add api-design' or '#86cb5gx0k - fix: ...'"
+            echo "::error::PR title must be a conventional commit, e.g. 'feat(skills): add api-design'"
             exit 1
           }

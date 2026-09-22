@@ -103,7 +103,7 @@ That's it. From now on, every release opens a PR in every consumer repo.
 | `feat!: ...` or `BREAKING CHANGE:` in the body | major |
 | `docs:`, `chore:`, `refactor:`, `ci:`, ... | none |
 
-A `#<ClickUpId> - ` prefix is allowed; [`pr-title.yml`](.github/workflows/pr-title.yml) rejects anything else. Changing what a skill tells the agent is `feat` or `fix`, not `docs`.
+[`pr-title.yml`](.github/workflows/pr-title.yml) rejects anything else. Changing what a skill tells the agent is `feat` or `fix`, not `docs`.
 
 **Release:** *Actions → release → Run workflow* (or `gh workflow run release`).
 
