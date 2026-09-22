@@ -11,16 +11,16 @@ jobs:
       tag: ${{ steps.release.outputs.tag }}
     steps:
       # The App token (not GITHUB_TOKEN) lets the release commit through main's branch protection.
-      - uses: actions/create-github-app-token@v1
+      - uses: actions/create-github-app-token@v3
         id: app
         with:
           app-id: ${{ secrets.AGENTBASE_APP_ID }}
           private-key: ${{ secrets.AGENTBASE_APP_PRIVATE_KEY }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ steps.app.outputs.token }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - id: release
