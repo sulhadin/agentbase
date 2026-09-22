@@ -79,14 +79,17 @@ The first release is `v1.0.0`. To start at `0.x`, push a baseline tag first: `gi
 First give the GitHub App access to them (*Settings → Applications → your App → Configure → Repository access*). Then, from your `agentbase` clone:
 
 ```bash
-npm run onboard -- repo-a repo-b
+npm install
+npm run setup
 ```
+
+Pick the repos, then the agents (Claude Code, Codex, Cursor, Antigravity, Copilot, …), confirm. Agents that read the same folder share one copy. Non-interactive: `npm run onboard -- repo-a repo-b --targets claudecode,codexcli`.
 
 For each repo it clones, runs [`adopt.sh`](scripts/adopt.sh) on a `chore/adopt-agentbase` branch and opens a PR. `adopt.sh` pins the latest release, imports skills the repo already has, generates the tool folders, adds a drift-check workflow and the Claude plugin, and tags the repo `agentbase-consumer`. Repos already adopted, or with an open adoption PR, are skipped.
 
 Before merging each PR, delete from `.rulesync/skills/` anything agentbase now ships and re-run `npx rulesync@16 generate`.
 
-Other tools or features: `--targets cursor,claudecode --features skills,rules` (any rulesync value works). To adopt by hand instead, run `bash <(curl -fsSL https://raw.githubusercontent.com/<org>/agentbase/main/scripts/adopt.sh) <org>` from the repo root.
+`onboard` also takes `--features skills,rules` (any rulesync value works). To adopt by hand instead, run `bash <(curl -fsSL https://raw.githubusercontent.com/<org>/agentbase/main/scripts/adopt.sh) <org>` from the repo root.
 
 That's it. From now on, every release opens a PR in every consumer repo.
 
