@@ -13,12 +13,12 @@ Claude Code · Cursor · Codex · Antigravity
 
 ---
 
-Teams copy the same `SKILL.md` files into every repo, and the copies drift. agentbase keeps them in **one repo**. Tag a release, and each consumer repo gets a pull request with the new version, generated for every AI tool it uses.
+Teams copy the same `SKILL.md` files into every repo, and the copies drift. agentbase keeps them in **one repo**. Merge conventional-commit PRs, press *Run workflow*, and each consumer repo gets a pull request with the new version, generated for every AI tool it uses. Versions, tags and `CHANGELOG.md` are computed for you.
 
 ```
  your-org/agentbase                   each consumer repo
  ──────────────────                   ──────────────────
- skills/*/SKILL.md ── git tag v1.2.0 ──▶ PR "Bump agentbase to v1.2.0"
+ skills/*/SKILL.md ── release v1.2.0 ──▶ PR "Bump agentbase to v1.2.0"
                                           ├─ .claude/skills/   → Claude Code
                                           └─ .agents/skills/   → Cursor · Codex · Antigravity
  .rulesync/subagents, commands ─────────▶ Claude Code plugin (marketplace)
@@ -59,17 +59,20 @@ In `templates/codeowners-snippet`, keep `@__ORG__` for a personal account; for a
    gh secret set AGENTBASE_APP_ID --body <app-id>
    gh secret set AGENTBASE_APP_PRIVATE_KEY < key.pem
    ```
+4. If `main` is protected, add the App to the bypass list; it pushes the release commit and tag.
 
 > [!NOTE]
 > Private `agentbase`? Consumers also need a read-only token as the `AGENTBASE_READ_TOKEN` secret for their CI, and developers need `export GITHUB_TOKEN=$(gh auth token)` before running rulesync.
 
-### 4. Cut the first release
+### 4. Make squash merges carry the PR title
 
-Add a `## 0.1.0` section to `CHANGELOG.md`, merge to `main`, then:
+Releases are computed from the commits on `main`, so each squash commit must be the (conventional) PR title:
 
 ```bash
-git tag v0.1.0 && git push origin v0.1.0
+gh api -X PATCH repos/<org>/agentbase -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=PR_BODY
 ```
+
+The first release is `v1.0.0`. To start at `0.x`, push a baseline tag first: `git tag v0.1.0 && git push origin v0.1.0`.
 
 ### 5. Onboard each consumer repo
 
@@ -87,15 +90,26 @@ It pins the latest release, imports skills the repo already has, generates the t
 
 Other tools or features: `--targets cursor,claudecode --features skills,rules` (any rulesync value works).
 
-That's it. From now on, every tag you push opens a PR in every consumer repo.
+That's it. From now on, every release opens a PR in every consumer repo.
 
 ## Day to day
 
-**Change a skill:** edit, add a `CHANGELOG.md` entry, merge, `git tag vX.Y.Z && git push origin vX.Y.Z`.
+**Change a skill:** open a PR with a conventional title, squash-merge it. Repeat as often as you like.
+
+| PR title | Release |
+|---|---|
+| `feat(skills): add api-design` | minor |
+| `fix: ...`, `perf: ...` | patch |
+| `feat!: ...` or `BREAKING CHANGE:` in the body | major |
+| `docs:`, `chore:`, `refactor:`, `ci:`, ... | none |
+
+A `#<ClickUpId> - ` prefix is allowed; [`pr-title.yml`](.github/workflows/pr-title.yml) rejects anything else. Changing what a skill tells the agent is `feat` or `fix`, not `docs`.
+
+**Release:** *Actions → release → Run workflow* (or `gh workflow run release`).
 
 | Step | What happens |
 |---|---|
-| [`release.yml`](.github/workflows/release.yml) | GitHub release from the matching changelog section |
+| [`release.yml`](.github/workflows/release.yml) | next version from the commits since the last tag; updates `CHANGELOG.md` and the plugin version, tags, publishes the GitHub release. No-op if nothing releasable. |
 | [`sync.yml`](.github/workflows/sync.yml) | PR `chore/agentbase-sync` in every repo with topic `agentbase-consumer` |
 | consumer CI | [`agentbase-check.yml`](templates/consumer-ci.yml) regenerates from `rulesync.lock` and fails on drift |
 

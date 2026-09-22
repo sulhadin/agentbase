@@ -1,25 +1,48 @@
+# Run by hand from main. Picks the version from conventional commits since the last tag,
+# updates CHANGELOG.md, tags, publishes the GitHub release and rolls it out to consumers.
 name: release
 on:
-  push:
-    tags: ['v*']
-permissions:
-  contents: write
+  workflow_dispatch:
+concurrency: release
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
     steps:
+      # The App token (not GITHUB_TOKEN) lets the release commit through main's branch protection.
+      - uses: actions/create-github-app-token@v1
+        id: app
+        with:
+          app-id: ${{ secrets.AGENTBASE_APP_ID }}
+          private-key: ${{ secrets.AGENTBASE_APP_PRIVATE_KEY }}
       - uses: actions/checkout@v4
-      - name: Extract this version's CHANGELOG section
-        id: notes
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app.outputs.token }}
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - id: release
+        env:
+          GITHUB_TOKEN: ${{ steps.app.outputs.token }}
+          GIT_AUTHOR_NAME: agentbase-release
+          GIT_AUTHOR_EMAIL: agentbase-release@users.noreply.github.com
+          GIT_COMMITTER_NAME: agentbase-release
+          GIT_COMMITTER_EMAIL: agentbase-release@users.noreply.github.com
         run: |
-          v="${GITHUB_REF_NAME#v}"
-          awk -v v="$v" '/^## /{p=($2==v || $2=="["v"]")} p' CHANGELOG.md > notes.md
-          [ -s notes.md ] || echo "No CHANGELOG entry for $v." > notes.md
-      - run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md
-        env: { GH_TOKEN: "${{ github.token }}" }
+          before=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          npx semantic-release
+          after=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          if [ "$after" != "$before" ]; then
+            echo "tag=$after" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::No feat/fix/breaking commits since $before — nothing to release."
+          fi
   sync:
     needs: release
+    if: needs.release.outputs.tag != ''
     uses: ./.github/workflows/sync.yml
     with:
-      ref: ${{ github.ref_name }}
+      ref: ${{ needs.release.outputs.tag }}
     secrets: inherit
