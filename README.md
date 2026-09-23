@@ -39,9 +39,8 @@ gh repo create <org>/agentbase --template sulhadin/agentbase --public --clone
 Keep the name **`agentbase`**; the scripts and workflows address `<org>/agentbase`.
 
 Then make it yours:
-- `.claude-plugin/marketplace.json`: change `"owner": { "name": "sulhadin" }` to your org.
+- `.claude-plugin/marketplace.json`: change `"owner": { "name": "your-org" }` to your org.
 - `README.md`: in the first two badge links, replace `sulhadin/agentbase` with `<org>/agentbase`.
-- `CHANGELOG.md`: delete it; your first release writes a fresh one.
 
 Nothing in the repo lists consumer repos. Sync finds them at run time as the repos under the copy's owner with the `agentbase-consumer` topic, so a copy never reaches the original owner's repos.
 
@@ -64,7 +63,9 @@ description: REST conventions for this org. Use when adding or changing an HTTP 
 2. ...
 ```
 
-`name` must match the folder name; `description` tells the agent when to load it. Replace the example skills in `skills/` with yours.
+`name` must match the folder name; `description` tells the agent when to load it.
+
+The template ships one placeholder of each kind: `skills/example-skill/`, `.rulesync/subagents/example-subagent.md` and `.rulesync/commands/example-command.md`. Replace them with yours.
 
 Subagents and commands are packaged into a Claude Code plugin: after touching `.rulesync/`, run `npm install && npm run plugin` and commit the regenerated `plugins/` folder (CI fails if it is stale).
 
@@ -178,6 +179,8 @@ That's it. From now on, every release opens a PR in every consumer repo.
 | [`release.yml`](.github/workflows/release.yml) | next version from the commits since the last tag; updates `CHANGELOG.md` and the plugin version, tags, publishes the GitHub release. No-op if nothing releasable. |
 | [`sync.yml`](.github/workflows/sync.yml) | PR `chore/agentbase-sync` in every repo with topic `agentbase-consumer` |
 | consumer CI | [`agentbase-check.yml`](templates/consumer-ci.yml) regenerates from `rulesync.lock` and fails on drift |
+
+**Release from another branch:** set the Actions variable `RELEASE_BRANCH` (*Settings → Secrets and variables → Actions → Variables*) to release that branch instead of `main`, e.g. to keep `main` as a clean template while your own content lives elsewhere. The release workflow then refuses to run from any other branch.
 
 **Roll out to one repo only:** *Actions → sync consumers → Run workflow*, set `ref` to a tag (e.g. `v1.2.0`) and `repo` to the repo name (e.g. `web`).
 
