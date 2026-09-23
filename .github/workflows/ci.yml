@@ -1,24 +1,14 @@
 name: ci
-on:
-  pull_request:
-  push:
-    branches: [main]
+on: [pull_request, push]
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with: { persist-credentials: false }
       - uses: actions/setup-node@v7
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      - name: every skill has SKILL.md with name + description
-        run: |
-          set -e
-          for d in skills/*/; do
-            f="$d/SKILL.md"
-            [ -f "$f" ] || { echo "::error::$d has no SKILL.md"; exit 1; }
-            grep -q '^name:' "$f" && grep -q '^description:' "$f" || { echo "::error file=$f::needs name and description"; exit 1; }
-          done
-      - run: npm run doctor
-      - name: plugin output is up to date
-        run: npm run check
+      - name: groups are well-formed
+        run: node scripts/lint-groups.mjs
+      - run: npm test

@@ -2,13 +2,11 @@
   "name": "agentbase",
   "version": "0.0.0",
   "private": true,
-  "description": "Shared AI agent skills, subagents and commands for every consumer repo. Consumed via rulesync sources + Claude Code plugin marketplace.",
+  "description": "Shared AI agent skills, subagents, commands and hooks, rolled out to every consumer repo as PRs.",
   "scripts": {
-    "plugin": "rulesync generate --targets claudecode-plugin --features commands,subagents --output-roots ./plugins/agentbase --delete",
-    "doctor": "rulesync doctor",
-    "check": "npm run plugin && git diff --exit-code -- plugins/",
     "onboard": "scripts/onboard.sh",
-    "setup": "node scripts/setup.mjs"
+    "setup": "node scripts/setup.mjs",
+    "test": "node --test"
   },
   "devDependencies": {
     "@inquirer/prompts": "^8.7.2",

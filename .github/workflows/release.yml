@@ -8,23 +8,27 @@ concurrency: release
 jobs:
   release:
     runs-on: ubuntu-latest
+    # Restricting this environment to the release branch keeps the App key away from other branches.
+    environment: release
     outputs:
       tag: ${{ steps.release.outputs.tag }}
     env:
       RELEASE_BRANCH: ${{ vars.RELEASE_BRANCH || 'main' }}
+      REF_NAME: ${{ github.ref_name }}
     steps:
       # semantic-release silently skips other branches, which would read as "nothing to release".
       - name: Only from the release branch
         if: github.ref_name != env.RELEASE_BRANCH
         run: |
-          echo "::error::Run this workflow from '$RELEASE_BRANCH', not '${{ github.ref_name }}'."
+          echo "::error::Run this workflow from '$RELEASE_BRANCH', not '$REF_NAME'."
           exit 1
-      # The App token (not GITHUB_TOKEN) lets the release commit through main's branch protection.
+      # The App token (not GITHUB_TOKEN) lets the release commit through the branch's protection.
       - uses: actions/create-github-app-token@v3
         id: app
         with:
           app-id: ${{ secrets.AGENTBASE_APP_ID }}
           private-key: ${{ secrets.AGENTBASE_APP_PRIVATE_KEY }}
+          permission-contents: write
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -40,17 +44,12 @@ jobs:
           GIT_COMMITTER_NAME: agentbase-release
           GIT_COMMITTER_EMAIL: agentbase-release@users.noreply.github.com
         run: |
-          before=$(git describe --tags --abbrev=0 2>/dev/null || true)
           npx semantic-release
-          after=$(git describe --tags --abbrev=0 2>/dev/null || true)
-          if [ "$after" != "$before" ]; then
-            echo "tag=$after" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::No feat/fix/breaking commits since $before — nothing to release."
-          fi
+          grep -q '^tag=' "$GITHUB_OUTPUT" || echo "::notice::No feat/fix/breaking commits since the last tag — nothing to release."
   sync:
     needs: release
-    if: needs.release.outputs.tag != ''
+    # always(): a release that pushed its tag but then failed (e.g. creating the GitHub release) still rolls out.
+    if: always() && needs.release.outputs.tag != ''
     uses: ./.github/workflows/sync.yml
     with:
       ref: ${{ needs.release.outputs.tag }}

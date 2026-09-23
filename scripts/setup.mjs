@@ -1,15 +1,17 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { checkbox, confirm } from '@inquirer/prompts';
+import { fetchTree } from './sync-consumer.mjs';
 
-// Several agents read the same folder, so they map to one rulesync target and one copy.
+// Cursor, Copilot and OpenCode read .agents/skills too, so a copy in their own folder would only
+// make every skill appear twice.
 const AGENTS = [
-  { name: 'Claude Code', target: 'claudecode', dir: '.claude/skills', checked: true },
-  { name: 'Codex', target: 'codexcli', dir: '.agents/skills', checked: true },
+  { name: 'Claude Code', target: 'claudecode', dir: '.claude/', checked: true },
+  { name: 'Codex', target: 'codexcli', dir: '.agents/skills, .codex/', checked: true },
   { name: 'Cursor', target: 'codexcli', dir: '.agents/skills' },
   { name: 'Antigravity', target: 'codexcli', dir: '.agents/skills' },
-  { name: 'GitHub Copilot', target: 'copilot', dir: '.github/skills' },
-  { name: 'OpenCode', target: 'opencode', dir: '.opencode/skills' },
+  { name: 'GitHub Copilot', target: 'codexcli', dir: '.agents/skills' },
+  { name: 'OpenCode', target: 'codexcli', dir: '.agents/skills' },
   { name: 'Cline', target: 'cline', dir: '.cline/skills' },
   { name: 'Roo Code', target: 'roo', dir: '.roo/skills' },
   { name: 'Kiro', target: 'kiro', dir: '.kiro/skills' },
@@ -71,11 +73,32 @@ const selectedAgents = await ask(checkbox({
   choices: AGENTS.map((a) => ({ name: `${a.name.padEnd(15)} ${a.dir}`, short: a.name, value: a, checked: a.checked })),
 }));
 
+// Read from the latest release, since that is the ref adopt.sh pins and consumers actually fetch.
+const release = gh('release', 'view', '--json', 'tagName', '-q', '.tagName');
+const { groups } = fetchTree(owner, release);
+if (!groups.includes('common')) {
+  console.error(`agentbase ${release} has no groups/common/; release the grouped layout before onboarding.`);
+  process.exit(1);
+}
+const optionalGroups = groups.filter((g) => g !== 'common');
+const selectedGroups = optionalGroups.length
+  ? await ask(checkbox({
+      message: 'Groups (common is always included)',
+      pageSize: 15,
+      loop: false,
+      choices: optionalGroups.map((g) => {
+        const auto = selectedRepos.includes(g);
+        return { name: auto ? `${g}  (added to ${g} automatically)` : g, short: g, value: g, disabled: auto && 'auto' };
+      }),
+    }))
+  : [];
+
 const targets = [...new Set(selectedAgents.map((a) => a.target))];
 const dirs = [...new Set(selectedAgents.map((a) => a.dir))];
 
 console.log(`
   Repos:   ${selectedRepos.join(', ')}
+  Groups:  ${['common', ...selectedGroups].join(', ')} (+ a group named after each repo, if one exists)
   Writes:  ${dirs.join(', ')}
   Each repo gets a PR on chore/adopt-agentbase. The GitHub App needs access to
   these repos, or later release PRs will not reach them.
@@ -84,5 +107,8 @@ console.log(`
 if (!(await ask(confirm({ message: 'Open the PRs?', default: true })))) process.exit(0);
 
 const onboard = fileURLToPath(new URL('./onboard.sh', import.meta.url));
-const run = spawnSync('bash', [onboard, ...selectedRepos, '--targets', targets.join(',')], { stdio: 'inherit' });
+const groupFlags = selectedGroups.length ? ['--groups', selectedGroups.join(',')] : [];
+const run = spawnSync('bash', [onboard, ...selectedRepos, '--targets', targets.join(','), ...groupFlags], {
+  stdio: 'inherit',
+});
 process.exit(run.status ?? 1);

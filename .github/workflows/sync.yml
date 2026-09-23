@@ -1,5 +1,5 @@
-# Opens (or updates) a PR in every repo tagged with the `agentbase-consumer` topic,
-# bumping its agentbase ref and regenerating tool config.
+# Opens (or updates) a PR in every repo tagged with the `agentbase-consumer` topic that copies the
+# given agentbase release into its .agentbase/ and regenerates every agent's files from it.
 name: sync consumers
 on:
   workflow_call:
@@ -9,10 +9,17 @@ on:
     inputs:
       ref: { description: "agentbase tag to roll out (e.g. v1.4.0)", type: string, required: true }
       repo: { description: "Only this repo (optional)", type: string, required: false }
+      force: { description: "Allow rolling a repo back to an older tag", type: boolean, default: false }
+
+env:
+  # A consumer's project .npmrc must not be able to swap the package that runs here.
+  npm_config_registry: https://registry.npmjs.org/
 
 jobs:
   discover:
     runs-on: ubuntu-latest
+    # Restricting this environment to the release branch keeps the App key away from other branches.
+    environment: release
     outputs:
       repos: ${{ steps.list.outputs.repos }}
     steps:
@@ -22,6 +29,7 @@ jobs:
           app-id: ${{ secrets.AGENTBASE_APP_ID }}
           private-key: ${{ secrets.AGENTBASE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
+          permission-metadata: read
       - id: list
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
@@ -31,7 +39,8 @@ jobs:
           if [ -n "$REPO" ]; then
             repos=$(jq -cn --arg r "$REPO" '[$r]')
           else
-            repos=$(gh repo list "$OWNER" --topic agentbase-consumer --limit 500 --json name -q '[.[].name]')
+            repos=$(gh repo list "$OWNER" --topic agentbase-consumer --no-archived --limit 1000 --json name -q '[.[].name]')
+            [ "$(jq length <<<"$repos")" -lt 1000 ] || { echo "::error::1000+ consumers; paginate discovery"; exit 1; }
           fi
           echo "repos=$repos" >> "$GITHUB_OUTPUT"
           echo "targets: $repos"
@@ -40,114 +49,132 @@ jobs:
     needs: discover
     if: needs.discover.outputs.repos != '[]'
     runs-on: ubuntu-latest
+    environment: release
     strategy:
       fail-fast: false
       max-parallel: 5
       matrix:
         repo: ${{ fromJson(needs.discover.outputs.repos) }}
+    # Two rollouts to one repo would race on chore/agentbase-sync; the later one waits instead.
+    concurrency:
+      group: agentbase-sync-${{ matrix.repo }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: consumer
     steps:
       - uses: actions/create-github-app-token@v3
-        id: app
+        id: write
         with:
           app-id: ${{ secrets.AGENTBASE_APP_ID }}
           private-key: ${{ secrets.AGENTBASE_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-          repositories: ${{ matrix.repo }},agentbase
+          repositories: ${{ matrix.repo }}
+          permission-contents: write
+          permission-pull-requests: write
+      - uses: actions/create-github-app-token@v3
+        id: read
+        with:
+          app-id: ${{ secrets.AGENTBASE_APP_ID }}
+          private-key: ${{ secrets.AGENTBASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: read
       - uses: actions/checkout@v7
         with:
           repository: ${{ github.repository_owner }}/${{ matrix.repo }}
-          token: ${{ steps.app.outputs.token }}
+          token: ${{ steps.write.outputs.token }}
+          path: consumer
+          persist-credentials: false
+      # The release being rolled out, so its own apply logic and content are used together.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          token: ${{ steps.read.outputs.token }}
+          path: agentbase
+          persist-credentials: false
       - uses: actions/setup-node@v7
-        # Runs in a consumer checkout: npx needs no install, and v5+ auto-caching fails when a packageManager field has no lockfile.
+        # npx needs no install, and v5+ auto-caching fails when a packageManager field has no lockfile.
         with: { node-version: 22, package-manager-cache: false }
-      - name: Bump agentbase ref
-        id: bump
-        env: { REF: "${{ inputs.ref }}" }
+      - name: Copy the release into .agentbase/
+        id: apply
+        env:
+          REF: ${{ inputs.ref }}
+          REPO: ${{ matrix.repo }}
+          FORCE: ${{ inputs.force && '--force' || '' }}
         run: |
           [[ "$REF" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "::error::invalid ref: $REF"; exit 1; }
           # The topic is added when the adoption PR opens, so it can precede the merge that adds rulesync.jsonc.
           if [ ! -f rulesync.jsonc ]; then
-            echo "::notice::${{ matrix.repo }} has no rulesync.jsonc on its default branch yet; skipping."
+            echo "::notice::$REPO has no rulesync.jsonc on its default branch yet; skipping."
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          cp rulesync.lock "$RUNNER_TEMP/old.lock" 2>/dev/null || true
-          old=$(grep -oE '"ref": *"[^"]+"' rulesync.jsonc | head -1 | sed -E 's/.*"([^"]+)"$/\1/')
-          echo "old=$old" >> "$GITHUB_OUTPUT"
-          sed -i -E '/\/agentbase"/ s/"ref": *"[^"]+"/"ref": "'"$REF"'"/' rulesync.jsonc
-          grep -q "\"$REF\"" rulesync.jsonc || { echo "::error::ref not bumped in rulesync.jsonc"; exit 1; }
-          # Pins the Claude Code plugin marketplace to the same tag; without a ref it follows the default branch,
-          # which may be a template rather than the released content. Older consumers get the ref added.
-          if [ -f .claude/settings.json ]; then
-            node -e '
-              const fs = require("fs"), [file, ref] = process.argv.slice(1);
-              const pin = (line) => /"ref":\s*"[^"]*"/.test(line)
-                ? line.replace(/("ref":\s*")[^"]*"/, `$1${ref}"`)
-                : line.replace(/("repo":\s*"[^"]*\/agentbase")/, `$1, "ref": "${ref}"`);
-              const text = fs.readFileSync(file, "utf8");
-              fs.writeFileSync(file, text.split("\n").map((l) => /"repo":\s*"[^"]*\/agentbase"/.test(l) ? pin(l) : l).join("\n"));
-            ' .claude/settings.json "$REF"
-          fi
-      - name: Install + generate
-        if: steps.bump.outputs.skip != 'true'
-        env: { GITHUB_TOKEN: "${{ steps.app.outputs.token }}" }
+          old=$(node -e 'try { console.log(require("./agentbase.json").ref ?? "") } catch { console.log("") }')
+          [ -n "$old" ] || old=$(grep -ioE '"source": *"[^"]*/agentbase[^"]*"[^}]*"ref": *"[^"]+"' rulesync.jsonc \
+            | sed -E 's/.*"ref": *"([^"]+)"$/\1/' | head -1)
+          echo "old=${old:-none}" >> "$GITHUB_OUTPUT"
+          [ -f agentbase.json ] || echo "migrated=true" >> "$GITHUB_OUTPUT"
+          node ../agentbase/scripts/sync-consumer.mjs apply "$REF" "$GITHUB_REPOSITORY_OWNER" "$REPO" --from ../agentbase $FORCE
+      - name: Generate agent files
+        if: steps.apply.outputs.skip != 'true'
+        # No token here: generation reads only the checkout, so a compromised package has nothing to steal.
         run: |
-          npx rulesync@16 install --update
-          npx rulesync@16 generate
+          [ ! -f rulesync.lock ] || npx --yes rulesync@16 install --frozen
+          npx --yes rulesync@16 generate --delete
       - name: Commit message and PR body
         id: msg
-        if: steps.bump.outputs.skip != 'true'
+        if: steps.apply.outputs.skip != 'true'
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.read.outputs.token }}
           REF: ${{ inputs.ref }}
-          OLD: ${{ steps.bump.outputs.old }}
+          OLD: ${{ steps.apply.outputs.old }}
+          MIGRATED: ${{ steps.apply.outputs.migrated }}
+          REPO: ${{ matrix.repo }}
         run: |
-          changed=$(node -e '
-            const fs = require("fs");
-            const read = (f) => { try { return JSON.parse(fs.readFileSync(f, "utf8")); } catch { return {}; } };
-            const skills = (lock) => Object.fromEntries(Object.values(lock.sources ?? {})
-              .flatMap((s) => Object.entries(s.skills ?? {}).map(([name, v]) => [name, v.integrity])));
-            const before = skills(read(process.argv[1])), after = skills(read("rulesync.lock"));
-            const names = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((n) => before[n] !== after[n]).sort();
-            console.log(names.map((n) => !(n in before) ? `${n} (new)` : !(n in after) ? `${n} (removed)` : n).join(", ") || "none");
-          ' "$RUNNER_TEMP/old.lock")
-          # Consumers keep the agentbase-check.yml they were adopted with, so sync is where older ones hear about this.
-          ignored=$(
-            { find . \( -path ./.git -o -path ./.rulesync -o -path ./node_modules \) -prune -o -type f -path '*/skills/*/SKILL.md' -print
-              [ -f .claude/settings.json ] && echo ./.claude/settings.json; } | git check-ignore -v --stdin | grep -Ev '^[^:]*:[0-9]+:!' | cut -f1 | sort -u | paste -sd' ' - || true
-          )
-          [ -z "$ignored" ] || echo "::warning::${{ matrix.repo }}: .gitignore hides generated files ($ignored); they are not committed."
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "::notice::$REPO is already up to date with $REF; no PR."
+            echo "open=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "open=true" >> "$GITHUB_OUTPUT"
+          changed=$(node ../agentbase/scripts/sync-consumer.mjs summary)
+          ignored=$(git ls-files --others --ignored --exclude-standard -- .agentbase .claude .agents .codex .github \
+            .cursor .opencode .cline .roo .kiro .junie .warp .qwen .augment | grep -v '\.local\.' | paste -sd' ' - || true)
+          [ -z "$ignored" ] || echo "::warning::$REPO: .gitignore hides generated files: $ignored"
           # Release notes are free text, so a fixed heredoc delimiter could end the output early.
           eof="EOF_$(openssl rand -hex 8)"
           {
-            echo "title=chore(agentbase): update shared AI agent skills to $REF"
+            echo "title=chore(agentbase): update shared AI agent config to $REF"
             echo "commit<<$eof"
-            echo "chore(agentbase): update shared AI agent skills to $REF"
+            echo "chore(agentbase): update shared AI agent config to $REF"
             echo
-            echo "Bump $GITHUB_REPOSITORY from $OLD to $REF and regenerate."
+            echo "Copy $GITHUB_REPOSITORY $REF (was $OLD) into .agentbase/ and regenerate."
             echo
-            echo "Changed skills: $changed"
+            echo "Changed: $changed"
             echo "$eof"
             echo "body<<$eof"
             echo "## Changelog"
             echo "- Bump agentbase \`$OLD\` → \`$REF\`"
-            echo "- Changed skills: $changed"
+            echo "- Changed: $changed"
+            [ "$MIGRATED" != true ] || echo "- Moves agentbase's content from rulesync \`sources\` into \`.agentbase/\` and \`agentbase.json\`; skills agentbase no longer ships are removed, and the old agentbase Claude Code plugin is replaced by committed subagents, commands and hooks."
             echo
             echo "## Description"
-            echo "Automated rollout of shared AI agent config. Generated files are regenerated from the new lockfile; do not edit them by hand."
+            echo "Automated rollout of shared AI agent config. \`.agentbase/\` and the generated agent files are rewritten on every sync; do not edit them by hand."
             echo
             if [ -n "$ignored" ]; then
               echo "## Before merge"
-              echo "- \`.gitignore\` hides generated files, so this PR cannot commit them: $ignored. Un-ignore them (e.g. replace \`.claude\` with \`.claude/*\`, \`!.claude/skills/\`, \`!.claude/settings.json\`)."
+              echo "- \`.gitignore\` hides generated files, so this PR cannot commit them: $ignored. Fix \`.gitignore\` on the default branch (not on this branch, which sync rebuilds)."
               echo
             fi
             gh release view "$REF" --repo "$GITHUB_REPOSITORY" --json body -q .body || true
             echo "$eof"
           } >> "$GITHUB_OUTPUT"
       - uses: peter-evans/create-pull-request@v8
-        if: steps.bump.outputs.skip != 'true'
+        if: steps.apply.outputs.skip != 'true' && steps.msg.outputs.open == 'true'
         with:
-          token: ${{ steps.app.outputs.token }}
+          path: consumer
+          token: ${{ steps.write.outputs.token }}
           branch: chore/agentbase-sync
           delete-branch: true
           commit-message: ${{ steps.msg.outputs.commit }}
