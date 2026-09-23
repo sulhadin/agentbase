@@ -6,12 +6,19 @@ module.exports = {
     ['@semantic-release/commit-analyzer', { preset: 'conventionalcommits' }],
     ['@semantic-release/release-notes-generator', { preset: 'conventionalcommits' }],
     ['@semantic-release/changelog', { changelogFile: 'CHANGELOG.md', changelogTitle: '# Changelog' }],
-    // Claude Code only pulls a plugin update when plugin.json's version changes.
-    ['@semantic-release/exec', { prepareCmd: 'node scripts/set-version.mjs ${nextRelease.version}' }],
+    [
+      '@semantic-release/exec',
+      {
+        prepareCmd: 'npm version ${nextRelease.version} --no-git-tag-version --allow-same-version',
+        // Runs once the tag is pushed but before the GitHub release, so a failure there still leaves the
+        // workflow knowing which tag to roll out.
+        publishCmd: 'echo "tag=${nextRelease.gitTag}" >> "$GITHUB_OUTPUT"',
+      },
+    ],
     [
       '@semantic-release/git',
       {
-        assets: ['CHANGELOG.md', 'package.json', 'package-lock.json', 'plugins/**', '.claude-plugin/marketplace.json'],
+        assets: ['CHANGELOG.md', 'package.json', 'package-lock.json'],
         message: 'chore(release): ${nextRelease.version} [skip ci]',
       },
     ],

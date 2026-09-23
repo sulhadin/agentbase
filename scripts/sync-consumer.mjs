@@ -1,23 +1,33 @@
 // Keeps a consumer checkout in step with an agentbase release. Run from the consumer's root:
-//   node sync-consumer.mjs apply <ref> <owner> <repo> [extra-groups-csv]
-//   node sync-consumer.mjs changed <old-lock> <new-lock>
-// agentbase.json records the repo's groups; rulesync.jsonc sources and the enabled Claude Code
-// plugins are derived from it, because a group may have skills, a plugin, or both.
+//   node sync-consumer.mjs apply <ref> <owner> <repo> [--groups a,b] [--from <agentbase checkout>] [--force]
+//   node sync-consumer.mjs summary
+// The groups' content is copied into .agentbase/ (committed) and rulesync generates every agent's files
+// from it plus the repo's own .rulesync/, so nothing is fetched at generate time and cloud agents see it all.
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import {
+  cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const MEMBERSHIP_FILE = 'agentbase.json';
+export const VENDOR_DIR = '.agentbase';
+export const INPUT_ROOTS = [VENDOR_DIR, '.rulesync'];
+const PARTS = ['skills', 'subagents', 'commands', 'hooks'];
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const unique = (xs) => [...new Set(xs)];
+const listDir = (dir) => (existsSync(dir) ? readdirSync(dir, { withFileTypes: true }) : []);
 
 export function parseTree(paths) {
-  const collect = (re) => unique(paths.map((p) => p.match(re)?.[1]).filter(Boolean)).sort();
-  return {
-    groups: collect(/^groups\/([^/]+)\//),
-    skillGroups: collect(/^groups\/([^/]+)\/skills\/[^/]+\/SKILL\.md$/),
-    pluginGroups: collect(/^plugins\/([^/]+)\/\.claude-plugin\/plugin\.json$/),
-  };
+  return { groups: unique(paths.map((p) => p.match(/^groups\/([^/]+)\//)?.[1]).filter(Boolean)).sort() };
+}
+
+export function readMembership(text) {
+  const data = JSON.parse(text);
+  const ok = Array.isArray(data.groups) && data.groups.every((g) => typeof g === 'string');
+  if (!ok) throw new Error(`${MEMBERSHIP_FILE}: "groups" must be an array of group names`);
+  return { ref: typeof data.ref === 'string' ? data.ref : null, groups: data.groups };
 }
 
 export function resolveGroups(current, { available, repo, requested = [] }) {
@@ -30,76 +40,148 @@ export function resolveGroups(current, { available, repo, requested = [] }) {
   };
 }
 
-// Rewrites only agentbase's entries; other sources stay as they are. Entries must be one per line.
-export function writeSources(text, { owner, ref, groups }) {
-  const lines = text.split('\n');
-  const ours = new RegExp(`"source":\\s*"${escapeRegExp(owner)}/agentbase(?::[^"]*)?"`);
+const semver = (ref) => ref?.match(/^v?(\d+)\.(\d+)\.(\d+)$/)?.slice(1).map(Number) ?? null;
+export function isDowngrade(from, to) {
+  const [a, b] = [semver(from), semver(to)];
+  if (!a || !b) return false;
+  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return b[i] < a[i];
+  return false;
+}
+
+export function mergeHooks(hookFiles) {
+  const hooks = {};
+  for (const { group, data } of hookFiles) {
+    for (const [event, entries] of Object.entries(data.hooks ?? {})) {
+      if (!Array.isArray(entries)) throw new Error(`groups/${group}/hooks.json: "${event}" must be an array`);
+      (hooks[event] ??= []).push(...entries);
+    }
+  }
+  return { version: 1, hooks };
+}
+
+// Copies the chosen groups into vendorDir; a name defined by two groups is an error, since rulesync would
+// silently keep only one of them.
+export function vendorGroups(agentbaseDir, groups, vendorDir) {
+  rmSync(vendorDir, { recursive: true, force: true });
+  const owner = new Map();
+  const claim = (kind, name, group) => {
+    const key = `${kind}/${name}`;
+    if (owner.has(key)) throw new Error(`${kind} "${name}" is defined by both ${owner.get(key)} and ${group}`);
+    owner.set(key, group);
+  };
+  const hookFiles = [];
+  for (const group of groups) {
+    const src = join(agentbaseDir, 'groups', group);
+    for (const skill of listDir(join(src, 'skills')).filter((e) => e.isDirectory())) {
+      claim('skill', skill.name, group);
+      cpSync(join(src, 'skills', skill.name), join(vendorDir, 'skills', skill.name), { recursive: true });
+    }
+    for (const kind of ['subagents', 'commands']) {
+      for (const file of listDir(join(src, kind)).filter((e) => e.isFile())) {
+        claim(kind.slice(0, -1), file.name, group);
+        mkdirSync(join(vendorDir, kind), { recursive: true });
+        cpSync(join(src, kind, file.name), join(vendorDir, kind, file.name));
+      }
+    }
+    // Namespaced by group, so hooks can reference .agentbase/scripts/<group>/<file> without collisions.
+    if (existsSync(join(src, 'scripts'))) cpSync(join(src, 'scripts'), join(vendorDir, 'scripts', group), { recursive: true });
+    if (existsSync(join(src, 'hooks.json'))) {
+      hookFiles.push({ group, data: JSON.parse(readFileSync(join(src, 'hooks.json'), 'utf8')) });
+    }
+  }
+  if (hookFiles.length) {
+    mkdirSync(vendorDir, { recursive: true });
+    writeFileSync(join(vendorDir, 'hooks.json'), `${JSON.stringify(mergeHooks(hookFiles), null, 2)}\n`);
+  }
+}
+
+const hasPart = (root, part) =>
+  part === 'hooks' ? existsSync(join(root, 'hooks.json')) : listDir(join(root, part)).length > 0;
+
+export function featuresFor(existing, roots) {
+  const present = PARTS.filter((p) => p === 'skills' || roots.some((r) => hasPart(r, p)));
+  // A managed feature with nothing behind it would make `generate --delete` wipe what the tool already has.
+  return unique([...existing.filter((f) => !PARTS.includes(f) || present.includes(f)), ...present]);
+}
+
+// Edits rulesync.jsonc as text to keep its comments: sets features and inputRoots, and drops the
+// agentbase `sources` entries of consumers adopted before .agentbase/ existed.
+export function updateRulesyncConfig(text, { owner, features }) {
+  const list = (xs) => `[${xs.map((x) => `"${x}"`).join(', ')}]`;
+  let lines = text.split('\n');
+
+  const ours = new RegExp(`"source":\\s*"${escapeRegExp(owner)}/agentbase(?::[^"]*)?"`, 'i');
   const open = lines.findIndex((l) => /"sources":\s*\[/.test(l));
-  if (open < 0) throw new Error('rulesync.jsonc has no "sources" array');
-  const close = lines.findIndex((l, i) => i > open && /^\s*\]/.test(l));
-
-  const isEntry = (l) => /^\s*\{/.test(l);
-  const body = lines.slice(open + 1, close);
-  if (body.some((l) => l.trim() && !l.trim().startsWith('//') && !(isEntry(l) && /\},?\s*$/.test(l)))) {
-    throw new Error('rulesync.jsonc "sources" must hold one entry per line');
+  if (open >= 0) {
+    if (/"sources":\s*\[.*\]/.test(lines[open])) {
+      if (ours.test(lines[open])) throw new Error('rulesync.jsonc "sources" must hold one entry per line');
+    } else {
+      const close = lines.findIndex((l, i) => i > open && /^\s*\]/.test(l));
+      if (close < 0) throw new Error('rulesync.jsonc "sources" is not closed on its own line');
+      const body = lines.slice(open + 1, close).filter((l) => !ours.test(l));
+      const entries = body.map((l, i) => (/^\s*\{/.test(l) ? i : -1)).filter((i) => i >= 0);
+      const fixed = body.map((l, i) => (entries.includes(i) ? l.replace(/\s*,?\s*$/, i === entries.at(-1) ? '' : ',') : l));
+      lines = [...lines.slice(0, open + 1), ...fixed, ...lines.slice(close)];
+    }
   }
-  const existing = body.filter((l) => ours.test(l));
-  const indent = (existing[0] ?? body.find(isEntry) ?? '    ').match(/^\s*/)[0] || '    ';
-  const features = text.match(/"features":\s*\[([^\]]*)\]/)?.[1] ?? '';
-  // rules live at the agentbase root, so only one entry selects them; repeating it would duplicate them.
-  const withRules = /"rules"/.test(features);
-  const fresh = groups.map(
-    (g, i) =>
-      `${indent}{ "source": "${owner}/agentbase:groups/${g}/skills", "ref": "${ref}", ${
-        withRules && i === 0 ? '"rules": ["*"], ' : ''
-      }"skills": ["*"] }`,
-  );
 
-  const firstOurs = body.findIndex((l) => ours.test(l));
-  const kept = body.filter((l) => !ours.test(l));
-  const at = firstOurs >= 0 ? firstOurs : kept.length;
-  const merged = [...kept.slice(0, at), ...fresh, ...kept.slice(at)];
-  const entries = merged.map((l, i) => (isEntry(l) ? i : -1)).filter((i) => i >= 0);
-  const last = entries.at(-1);
-  const normalized = merged.map((l, i) =>
-    isEntry(l) ? l.replace(/\s*,?\s*$/, i === last ? '' : ',') : l,
-  );
-  return [...lines.slice(0, open + 1), ...normalized, ...lines.slice(close)].join('\n');
+  const featuresAt = lines.findIndex((l) => /"features":\s*\[[^\]]*\]/.test(l));
+  if (featuresAt < 0) throw new Error('rulesync.jsonc needs a one-line "features" array');
+  lines[featuresAt] = lines[featuresAt].replace(/("features":\s*)\[[^\]]*\]/, `$1${list(features)}`);
+
+  const rootsAt = lines.findIndex((l) => /"inputRoots":/.test(l));
+  if (rootsAt >= 0) {
+    lines[rootsAt] = lines[rootsAt].replace(/("inputRoots":\s*)\[[^\]]*\]/, `$1${list(INPUT_ROOTS)}`);
+  } else {
+    const indent = lines[featuresAt].match(/^\s*/)[0];
+    if (!/,\s*$/.test(lines[featuresAt])) lines[featuresAt] += ',';
+    const lastProp = !lines.slice(featuresAt + 1).some((l) => /^\s*"/.test(l));
+    lines.splice(featuresAt + 1, 0, `${indent}"inputRoots": ${list(INPUT_ROOTS)}${lastProp ? '' : ','}`);
+  }
+  return lines.join('\n');
 }
 
-export function writeSettings(text, { owner, ref, plugins }) {
-  const settings = text?.trim() ? JSON.parse(text) : {};
-  settings.extraKnownMarketplaces ??= {};
-  const market = (settings.extraKnownMarketplaces.agentbase ??= {
-    source: { source: 'github', repo: `${owner}/agentbase` },
+// Earlier releases served subagents and commands as a Claude Code plugin from an agentbase marketplace.
+export function dropMarketplace(settings) {
+  const market = settings.extraKnownMarketplaces?.agentbase;
+  if (market?.source?.repo?.toLowerCase().endsWith('/agentbase')) delete settings.extraKnownMarketplaces.agentbase;
+  if (settings.extraKnownMarketplaces && !Object.keys(settings.extraKnownMarketplaces).length) {
+    delete settings.extraKnownMarketplaces;
+  }
+  for (const key of Object.keys(settings.enabledPlugins ?? {})) if (key.endsWith('@agentbase')) delete settings.enabledPlugins[key];
+  if (settings.enabledPlugins && !Object.keys(settings.enabledPlugins).length) delete settings.enabledPlugins;
+  return settings;
+}
+
+export function summarize(nameStatus) {
+  const buckets = { skills: new Map(), subagents: new Map(), commands: new Map(), scripts: new Map(), hooks: new Map() };
+  const label = { A: 'new', D: 'removed' };
+  for (const line of nameStatus.split('\n').filter(Boolean)) {
+    const [status, path] = line.split('\t');
+    const [, kind, name] = path.split('/');
+    if (kind === 'hooks.json') buckets.hooks.set('hooks.json', status[0]);
+    else if (buckets[kind] && name) {
+      const key = kind === 'skills' || kind === 'scripts' ? name : name.replace(/\.[^.]+$/, '');
+      // A skill folder with one file added and another deleted is still just "changed".
+      const prev = buckets[kind].get(key);
+      buckets[kind].set(key, prev && prev !== status[0] ? 'M' : status[0]);
+    }
+  }
+  const parts = Object.entries(buckets)
+    .filter(([, m]) => m.size)
+    .map(([kind, m]) => `${kind}: ${[...m].sort().map(([n, s]) => (label[s] ? `${n} (${label[s]})` : n)).join(', ')}`);
+  return parts.join('; ') || 'none';
+}
+
+function downloadAgentbase(owner, ref) {
+  const dir = mkdtempSync(join(tmpdir(), 'agentbase-'));
+  const archive = execFileSync('gh', ['api', `repos/${owner}/agentbase/tarball/${encodeURIComponent(ref)}`], {
+    maxBuffer: 256 * 1024 * 1024,
   });
-  if (market.source?.repo?.endsWith('/agentbase')) market.source.ref = ref;
-
-  settings.enabledPlugins ??= {};
-  const wanted = plugins.map((p) => `${p}@agentbase`);
-  for (const key of Object.keys(settings.enabledPlugins)) {
-    if (key.endsWith('@agentbase') && !wanted.includes(key)) delete settings.enabledPlugins[key];
-  }
-  // An explicit false is someone opting out of that group's plugin, so it is kept.
-  for (const key of wanted) if (!(key in settings.enabledPlugins)) settings.enabledPlugins[key] = true;
-  return `${JSON.stringify(settings, null, 2)}\n`;
-}
-
-// Keyed by skill name, so a skill that moved between sources (as in the move to groups) is unchanged.
-const skillHashes = (lock) =>
-  Object.fromEntries(
-    Object.values(lock?.sources ?? {}).flatMap((s) =>
-      Object.entries(s.skills ?? {}).map(([name, v]) => [name, v.integrity]),
-    ),
-  );
-
-export function changedSkills(beforeLock, afterLock) {
-  const before = skillHashes(beforeLock);
-  const after = skillHashes(afterLock);
-  return unique([...Object.keys(before), ...Object.keys(after)])
-    .filter((name) => !(name in before) || !(name in after) || before[name] !== after[name])
-    .sort()
-    .map((name) => (!(name in before) ? `${name} (new)` : !(name in after) ? `${name} (removed)` : name));
+  writeFileSync(join(dir, 'src.tgz'), archive);
+  execFileSync('tar', ['-xzf', 'src.tgz'], { cwd: dir });
+  const root = readdirSync(dir, { withFileTypes: true }).find((e) => e.isDirectory());
+  return join(dir, root.name);
 }
 
 export function fetchTree(owner, ref) {
@@ -111,53 +193,78 @@ export function fetchTree(owner, ref) {
   return parseTree(out.split('\n').filter(Boolean));
 }
 
-const readJson = (file) => {
-  try {
-    return JSON.parse(readFileSync(file, 'utf8'));
-  } catch {
-    return {};
+function apply(ref, owner, repo, { groups: requested = [], from, force = false }) {
+  if (!existsSync('rulesync.jsonc')) throw new Error('run from a consumer root with rulesync.jsonc');
+  const config = readFileSync('rulesync.jsonc', 'utf8');
+  const legacyRef = config.match(new RegExp(`"source":\\s*"${escapeRegExp(owner)}/agentbase[^"]*"[^}]*"ref":\\s*"([^"]+)"`, 'i'))?.[1];
+  const membership = existsSync(MEMBERSHIP_FILE) ? readMembership(readFileSync(MEMBERSHIP_FILE, 'utf8')) : null;
+  const currentRef = membership?.ref ?? legacyRef ?? null;
+  if (!force && isDowngrade(currentRef, ref)) throw new Error(`refusing to go from ${currentRef} back to ${ref}; pass --force`);
+
+  const agentbaseDir = from ?? downloadAgentbase(owner, ref);
+  const available = listDir(join(agentbaseDir, 'groups')).filter((e) => e.isDirectory()).map((e) => e.name).sort();
+  if (!available.includes('common')) throw new Error(`agentbase ${ref} has no groups/common/`);
+  const { groups, dropped } = resolveGroups(membership?.groups ?? null, { available, repo, requested });
+
+  const hadVendor = existsSync(VENDOR_DIR);
+  vendorGroups(agentbaseDir, groups, VENDOR_DIR);
+  if (existsSync(join(VENDOR_DIR, 'hooks.json'))) {
+    if (existsSync('.rulesync/hooks.json')) {
+      throw new Error(`.rulesync/hooks.json would replace agentbase's hooks; move them to agentbase's groups/${repo}/hooks.json`);
+    }
+    const settings = existsSync('.claude/settings.json') ? JSON.parse(readFileSync('.claude/settings.json', 'utf8')) : {};
+    // rulesync replaces the whole "hooks" key, so hooks written by hand would be lost silently.
+    if (!hadVendor && settings.hooks && Object.keys(settings.hooks).length) {
+      throw new Error(`.claude/settings.json already has hooks, which generation would overwrite; move them to agentbase's groups/${repo}/hooks.json`);
+    }
   }
-};
 
-function apply(ref, owner, repo, requestedCsv = '') {
-  const tree = fetchTree(owner, ref);
-  if (!tree.groups.includes('common')) throw new Error(`agentbase ${ref} has no groups/common/`);
-
-  const current = existsSync(MEMBERSHIP_FILE) ? readJson(MEMBERSHIP_FILE).groups : null;
-  const { groups, dropped } = resolveGroups(current, {
-    available: tree.groups,
-    repo,
-    requested: requestedCsv.split(',').filter(Boolean),
-  });
-  writeFileSync(MEMBERSHIP_FILE, `${JSON.stringify({ groups }, null, 2)}\n`);
-  writeFileSync(
-    'rulesync.jsonc',
-    writeSources(readFileSync('rulesync.jsonc', 'utf8'), {
-      owner,
-      ref,
-      groups: groups.filter((g) => tree.skillGroups.includes(g)),
-    }),
-  );
+  const existing = JSON.parse(config.replace(/^\s*\/\/.*$/gm, '').match(/"features":\s*(\[[^\]]*\])/)?.[1] ?? '[]');
+  const updated = updateRulesyncConfig(config, { owner, features: featuresFor(existing, INPUT_ROOTS) });
+  writeFileSync('rulesync.jsonc', updated);
+  if (existsSync('rulesync.lock') && !/"sources":\s*\[[^\]]*\{/s.test(updated.replace(/^\s*\/\/.*$/gm, ''))) {
+    rmSync('rulesync.lock');
+    // What the old sources fetched stays in local clones and, as part of the .rulesync/ input root,
+    // would keep generating skills agentbase has since dropped.
+    for (const dir of ['.rulesync/skills/.curated', '.rulesync/rules/.curated']) rmSync(dir, { recursive: true, force: true });
+  }
   if (existsSync('.claude/settings.json')) {
-    writeFileSync(
-      '.claude/settings.json',
-      writeSettings(readFileSync('.claude/settings.json', 'utf8'), {
-        owner,
-        ref,
-        plugins: groups.filter((g) => tree.pluginGroups.includes(g)),
-      }),
-    );
+    const before = JSON.parse(readFileSync('.claude/settings.json', 'utf8'));
+    const after = dropMarketplace(structuredClone(before));
+    if (JSON.stringify(before) !== JSON.stringify(after)) {
+      writeFileSync('.claude/settings.json', `${JSON.stringify(after, null, 2)}\n`);
+    }
   }
+  writeFileSync(MEMBERSHIP_FILE, `${JSON.stringify({ ref, groups }, null, 2)}\n`);
+
   console.log(`groups: ${groups.join(', ')}`);
   if (dropped.length) console.log(`dropped groups no longer in agentbase ${ref}: ${dropped.join(', ')}`);
 }
 
+function parseArgs(args) {
+  const opts = {};
+  const positional = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--groups') opts.groups = (args[++i] ?? '').split(',').filter(Boolean);
+    else if (args[i] === '--from') opts.from = args[++i];
+    else if (args[i] === '--force') opts.force = true;
+    else positional.push(args[i]);
+  }
+  return { positional, opts };
+}
+
 function main([command, ...args]) {
   try {
-    if (command === 'apply') apply(...args);
-    else if (command === 'changed') {
-      console.log(changedSkills(readJson(args[0]), readJson(args[1])).join(', ') || 'none');
-    } else throw new Error('usage: sync-consumer.mjs apply <ref> <owner> <repo> [groups] | changed <old-lock> <new-lock>');
+    if (command === 'apply') {
+      const { positional: [ref, owner, repo], opts } = parseArgs(args);
+      if (!ref || !owner || !repo) throw new Error('usage: apply <ref> <owner> <repo> [--groups a,b] [--from dir] [--force]');
+      apply(ref, owner, repo, opts);
+    } else if (command === 'summary') {
+      execFileSync('git', ['add', '--all', '--intent-to-add', VENDOR_DIR]);
+      console.log(summarize(execFileSync('git', ['diff', '--name-status', '--', VENDOR_DIR], { encoding: 'utf8' })));
+    } else {
+      throw new Error('usage: sync-consumer.mjs apply <ref> <owner> <repo> [...] | summary');
+    }
   } catch (err) {
     console.error(`✗ ${err.message}`);
     process.exit(1);

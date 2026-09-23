@@ -1,3 +1,4 @@
-# agentbase: shared AI config is owned by the agentbase maintainer
-rulesync.jsonc  @__ORG__
-rulesync.lock   @__ORG__
+# agentbase: what reaches every agent in this repo is reviewed by its maintainers
+agentbase.json   @__ORG__
+rulesync.jsonc   @__ORG__
+.agentbase/      @__ORG__

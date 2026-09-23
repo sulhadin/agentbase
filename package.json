@@ -4,8 +4,6 @@
   "private": true,
   "description": "Shared AI agent skills, subagents and commands for every consumer repo. Consumed via rulesync sources + Claude Code plugin marketplace.",
   "scripts": {
-    "plugin": "node scripts/build-plugins.mjs",
-    "check": "npm run plugin && git diff --exit-code -- plugins/ .claude-plugin/",
     "onboard": "scripts/onboard.sh",
     "setup": "node scripts/setup.mjs",
     "test": "node --test"

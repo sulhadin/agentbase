@@ -1,38 +1,14 @@
 name: ci
-on:
-  pull_request:
-  push:
-    branches: [main]
+on: [pull_request, push]
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with: { persist-credentials: false }
       - uses: actions/setup-node@v7
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      - name: groups are well-formed and skill names unique
-        run: |
-          set -e
-          [ -d groups/common ] || { echo "::error::groups/common/ is required; every consumer gets it"; exit 1; }
-          for legacy in skills .rulesync; do
-            [ ! -e "$legacy" ] || { echo "::error::$legacy/ is no longer read; move its content into groups/<group>/"; exit 1; }
-          done
-          for g in groups/*/; do
-            name=$(basename "$g")
-            [[ "$name" =~ ^[a-z0-9][a-z0-9._-]*$ ]] || { echo "::error::group '$name' must be lowercase letters, digits, . _ -"; exit 1; }
-          done
-          for d in groups/*/skills/*/; do
-            [ -d "$d" ] || continue
-            f="${d}SKILL.md"
-            [ -f "$f" ] || { echo "::error::$d has no SKILL.md"; exit 1; }
-            grep -q '^description:' "$f" || { echo "::error file=$f::needs a description"; exit 1; }
-            name=$(sed -n 's/^name: *//p' "$f" | head -1)
-            [ "$name" = "$(basename "$d")" ] || { echo "::error file=$f::name '$name' must match its folder '$(basename "$d")'"; exit 1; }
-          done
-          # rulesync keeps the first skill of a given name across a consumer's groups and drops the rest silently.
-          dupes=$(for d in groups/*/skills/*/; do [ -d "$d" ] && basename "$d"; done | sort | uniq -d)
-          [ -z "$dupes" ] || { echo "::error::skill names must be unique across groups: $dupes"; exit 1; }
+      - name: groups are well-formed
+        run: node scripts/lint-groups.mjs
       - run: npm test
-      - name: plugins and marketplace are up to date
-        run: npm run check

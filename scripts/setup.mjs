@@ -3,14 +3,15 @@ import { fileURLToPath } from 'node:url';
 import { checkbox, confirm } from '@inquirer/prompts';
 import { fetchTree } from './sync-consumer.mjs';
 
-// Several agents read the same folder, so they map to one rulesync target and one copy.
+// Cursor, Copilot and OpenCode read .agents/skills too, so a copy in their own folder would only
+// make every skill appear twice.
 const AGENTS = [
-  { name: 'Claude Code', target: 'claudecode', dir: '.claude/skills', checked: true },
-  { name: 'Codex', target: 'codexcli', dir: '.agents/skills', checked: true },
+  { name: 'Claude Code', target: 'claudecode', dir: '.claude/', checked: true },
+  { name: 'Codex', target: 'codexcli', dir: '.agents/skills, .codex/', checked: true },
   { name: 'Cursor', target: 'codexcli', dir: '.agents/skills' },
   { name: 'Antigravity', target: 'codexcli', dir: '.agents/skills' },
-  { name: 'GitHub Copilot', target: 'copilot', dir: '.github/skills' },
-  { name: 'OpenCode', target: 'opencode', dir: '.opencode/skills' },
+  { name: 'GitHub Copilot', target: 'codexcli', dir: '.agents/skills' },
+  { name: 'OpenCode', target: 'codexcli', dir: '.agents/skills' },
   { name: 'Cline', target: 'cline', dir: '.cline/skills' },
   { name: 'Roo Code', target: 'roo', dir: '.roo/skills' },
   { name: 'Kiro', target: 'kiro', dir: '.kiro/skills' },

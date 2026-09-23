@@ -1,118 +1,212 @@
 import assert from 'node:assert/strict';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { test } from 'node:test';
-import { changedSkills, parseTree, resolveGroups, writeSettings, writeSources } from '../scripts/sync-consumer.mjs';
+import { fileURLToPath } from 'node:url';
+import {
+  dropMarketplace, featuresFor, isDowngrade, mergeHooks, readMembership, resolveGroups, summarize,
+  updateRulesyncConfig, vendorGroups,
+} from '../scripts/sync-consumer.mjs';
 
-const rulesync = (entries, features = '"skills"') => `{
-  "targets": ["claudecode"],
-  "features": [${features}],
-  "sources": [
-    // One entry per agentbase skill group.
-${entries.map((e) => `    ${e}`).join('\n')}
-  ]
-}`;
-const parse = (text) => JSON.parse(text.replace(/^\s*\/\/.*$/gm, ''));
-const sources = (text) => parse(text).sources.map((s) => s.source);
-const at = { owner: 'acme', ref: 'v2.0.0' };
+const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), '..', 'scripts', 'sync-consumer.mjs');
+const tmp = () => mkdtempSync(join(tmpdir(), 'agentbase-test-'));
+const write = (root, files) => {
+  for (const [path, content] of Object.entries(files)) {
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), typeof content === 'string' ? content : JSON.stringify(content));
+  }
+  return root;
+};
+const jsonc = (text) => JSON.parse(text.replace(/^\s*\/\/.*$/gm, ''));
+const skill = (name) => `---\nname: ${name}\ndescription: d\n---\nbody\n`;
 
-test('parseTree separates groups, groups with skills and groups with a plugin', () => {
-  const tree = parseTree([
-    'groups/common/skills/a/SKILL.md',
-    'groups/backend/skills/b/SKILL.md',
-    'groups/hooks-only/hooks.json',
-    'plugins/common/.claude-plugin/plugin.json',
-    'plugins/hooks-only/.claude-plugin/plugin.json',
-    'README.md',
-  ]);
-  assert.deepEqual(tree, {
-    groups: ['backend', 'common', 'hooks-only'],
-    skillGroups: ['backend', 'common'],
-    pluginGroups: ['common', 'hooks-only'],
+const agentbaseFixture = () =>
+  write(tmp(), {
+    'groups/common/skills/shared/SKILL.md': skill('shared'),
+    'groups/common/subagents/reviewer.md': 'reviewer',
+    'groups/common/hooks.json': { version: 1, hooks: { postToolUse: [{ matcher: 'Write', command: 'a' }] } },
+    'groups/backend/skills/api/SKILL.md': skill('api'),
+    'groups/backend/commands/migrate.md': 'migrate',
+    'groups/backend/scripts/fmt.sh': 'echo fmt',
+    'groups/backend/hooks.json': { version: 1, hooks: { postToolUse: [{ matcher: 'Edit', command: 'b' }] } },
+    'groups/web/skills/ui/SKILL.md': skill('ui'),
   });
+
+const legacyConsumer = () =>
+  write(tmp(), {
+    'rulesync.jsonc': `{
+  "targets": ["claudecode", "codexcli"],
+  "features": ["skills"],
+  "sources": [
+    // Bumped automatically by agentbase's sync workflow. Do not edit by hand.
+    { "source": "Acme/agentbase", "ref": "v0.3.0", "skills": ["*"] },
+    { "source": "other/tools", "ref": "v1", "skills": ["x"] }
+  ]
+}
+`,
+    'rulesync.lock': '{}',
+    '.claude/settings.json': {
+      permissions: { allow: ['Bash(ls)'] },
+      extraKnownMarketplaces: { agentbase: { source: { source: 'github', repo: 'acme/agentbase', ref: 'v0.3.0' } } },
+      enabledPlugins: { 'agentbase@agentbase': true },
+    },
+  });
+
+const apply = (cwd, ...args) =>
+  spawnSync('node', [SCRIPT, 'apply', ...args], { cwd, encoding: 'utf8' });
+
+test('readMembership rejects malformed files instead of resetting the groups', () => {
+  assert.deepEqual(readMembership('{"ref":"v1.0.0","groups":["common","web"]}'), { ref: 'v1.0.0', groups: ['common', 'web'] });
+  assert.throws(() => readMembership('{"groups":["common",]}'));
+  assert.throws(() => readMembership('{"groups":"backend"}'), /array of group names/);
 });
 
 test('resolveGroups always includes common and the group named after the repo', () => {
   const available = ['backend', 'common', 'web', 'api'];
   assert.deepEqual(resolveGroups(null, { available, repo: 'api' }).groups, ['common', 'api']);
   assert.deepEqual(resolveGroups(['common', 'backend'], { available, repo: 'x' }).groups, ['common', 'backend']);
-  assert.deepEqual(resolveGroups(null, { available, repo: 'x', requested: ['web'] }).groups, ['common', 'web']);
+  assert.throws(() => resolveGroups(null, { available, repo: 'x', requested: ['nope'] }), /no such group: nope/);
+  assert.deepEqual(resolveGroups(['common', 'gone'], { available, repo: 'x' }).dropped, ['gone']);
 });
 
-test('resolveGroups rejects unknown requested groups and drops removed ones', () => {
-  assert.throws(() => resolveGroups(null, { available: ['common'], repo: 'x', requested: ['nope'] }), /no such group: nope/);
-  const { groups, dropped } = resolveGroups(['common', 'gone'], { available: ['common'], repo: 'x' });
-  assert.deepEqual(groups, ['common']);
-  assert.deepEqual(dropped, ['gone']);
+test('isDowngrade compares semver tags and ignores anything else', () => {
+  assert.equal(isDowngrade('v1.4.0', 'v1.3.9'), true);
+  assert.equal(isDowngrade('v1.4.0', 'v1.10.0'), false);
+  assert.equal(isDowngrade('v1.4.0', 'v1.4.0'), false);
+  assert.equal(isDowngrade(null, 'v1.0.0'), false);
+  assert.equal(isDowngrade('main', 'v1.0.0'), false);
 });
 
-test('writeSources fills an empty sources array', () => {
-  const text = writeSources(rulesync([]), { ...at, groups: ['common', 'backend'] });
-  assert.deepEqual(parse(text).sources, [
-    { source: 'acme/agentbase:groups/common/skills', ref: 'v2.0.0', skills: ['*'] },
-    { source: 'acme/agentbase:groups/backend/skills', ref: 'v2.0.0', skills: ['*'] },
+test('mergeHooks concatenates each event across groups', () => {
+  const merged = mergeHooks([
+    { group: 'a', data: { hooks: { postToolUse: [1], stop: [2] } } },
+    { group: 'b', data: { hooks: { postToolUse: [3] } } },
   ]);
+  assert.deepEqual(merged, { version: 1, hooks: { postToolUse: [1, 3], stop: [2] } });
+  assert.throws(() => mergeHooks([{ group: 'a', data: { hooks: { stop: {} } } }]), /must be an array/);
 });
 
-test('writeSources replaces a pre-groups entry and keeps other sources in place', () => {
-  const before = rulesync([
-    '{ "source": "other/tools", "ref": "v9", "skills": ["x"] },',
-    '{ "source": "acme/agentbase", "ref": "v1.0.0", "skills": ["*"] },',
-    '{ "source": "more/tools", "ref": "v1", "skills": ["y"] }',
-  ]);
-  const text = writeSources(before, { ...at, groups: ['common', 'web'] });
-  assert.deepEqual(sources(text), [
-    'other/tools',
-    'acme/agentbase:groups/common/skills',
-    'acme/agentbase:groups/web/skills',
-    'more/tools',
-  ]);
-  assert.deepEqual(parse(text).sources.map((s) => s.ref), ['v9', 'v2.0.0', 'v2.0.0', 'v1']);
+test('vendorGroups copies every part of the chosen groups only', () => {
+  const out = join(tmp(), '.agentbase');
+  vendorGroups(agentbaseFixture(), ['common', 'backend'], out);
+  assert.deepEqual(readdirSync(join(out, 'skills')).sort(), ['api', 'shared']);
+  assert.deepEqual(readdirSync(join(out, 'subagents')), ['reviewer.md']);
+  assert.deepEqual(readdirSync(join(out, 'commands')), ['migrate.md']);
+  assert.equal(readFileSync(join(out, 'scripts/backend/fmt.sh'), 'utf8'), 'echo fmt');
+  const hooks = JSON.parse(readFileSync(join(out, 'hooks.json'), 'utf8'));
+  assert.deepEqual(hooks.hooks.postToolUse.map((h) => h.command), ['a', 'b']);
 });
 
-test('writeSources selects rules once when the rules feature is on', () => {
-  const text = writeSources(rulesync([], '"rules", "skills"'), { ...at, groups: ['common', 'web'] });
-  assert.deepEqual(parse(text).sources.map((s) => s.rules), [['*'], undefined]);
-});
-
-test('writeSources removes every agentbase entry when no group has skills', () => {
-  const before = rulesync(['{ "source": "acme/agentbase:groups/common/skills", "ref": "v1.0.0", "skills": ["*"] }']);
-  assert.deepEqual(parse(writeSources(before, { ...at, groups: [] })).sources, []);
-});
-
-test('writeSources refuses multi-line entries rather than guessing', () => {
-  const before = rulesync(['{', '  "source": "other/tools"', '}']);
-  assert.throws(() => writeSources(before, { ...at, groups: ['common'] }), /one entry per line/);
-});
-
-test('writeSettings pins the marketplace and enables exactly the group plugins', () => {
-  const before = JSON.stringify({
-    extraKnownMarketplaces: {
-      agentbase: { source: { source: 'github', repo: 'acme/agentbase' } },
-      other: { source: { source: 'github', repo: 'x/tools', ref: 'stable' } },
-    },
-    enabledPlugins: { 'agentbase@agentbase': true, 'web@agentbase': false, 'lint@other': true },
-    permissions: { allow: ['Bash(ls)'] },
+test('vendorGroups refuses a skill defined by two groups', () => {
+  const src = write(tmp(), {
+    'groups/common/skills/dup/SKILL.md': skill('dup'),
+    'groups/web/skills/dup/SKILL.md': skill('dup'),
   });
-  const after = JSON.parse(writeSettings(before, { ...at, plugins: ['common', 'web'] }));
-  assert.equal(after.extraKnownMarketplaces.agentbase.source.ref, 'v2.0.0');
-  assert.equal(after.extraKnownMarketplaces.other.source.ref, 'stable');
-  assert.deepEqual(after.enabledPlugins, { 'web@agentbase': false, 'lint@other': true, 'common@agentbase': true });
-  assert.deepEqual(after.permissions, { allow: ['Bash(ls)'] });
+  assert.throws(() => vendorGroups(src, ['common', 'web'], join(tmp(), 'v')), /skill "dup" is defined by both common and web/);
 });
 
-test('writeSettings creates the marketplace entry when the file is empty', () => {
-  const after = JSON.parse(writeSettings('', { ...at, plugins: ['common'] }));
-  assert.deepEqual(after.extraKnownMarketplaces.agentbase.source, { source: 'github', repo: 'acme/agentbase', ref: 'v2.0.0' });
-  assert.deepEqual(after.enabledPlugins, { 'common@agentbase': true });
+test('featuresFor turns on parts that exist and keeps unrelated features', () => {
+  const root = write(tmp(), { 'subagents/a.md': 'a', 'hooks.json': '{}' });
+  assert.deepEqual(featuresFor(['skills', 'rules', 'commands'], [root]), ['skills', 'rules', 'subagents', 'hooks']);
 });
 
-test('changedSkills reports new, changed and removed skills by name across sources', () => {
-  const lock = (sources) => ({ sources });
-  const before = lock({ 'acme/agentbase': { skills: { a: { integrity: '1' }, b: { integrity: '1' }, gone: { integrity: '1' } } } });
-  const after = lock({
-    'acme/agentbase:groups/common/skills': { skills: { a: { integrity: '1' }, b: { integrity: '2' } } },
-    'acme/agentbase:groups/web/skills': { skills: { fresh: { integrity: '1' } } },
+test('updateRulesyncConfig drops agentbase sources, keeps others valid and adds inputRoots', () => {
+  const text = readFileSync(join(legacyConsumer(), 'rulesync.jsonc'), 'utf8');
+  const once = updateRulesyncConfig(text, { owner: 'acme', features: ['skills', 'subagents'] });
+  const config = jsonc(once);
+  assert.deepEqual(config.sources, [{ source: 'other/tools', ref: 'v1', skills: ['x'] }]);
+  assert.deepEqual(config.features, ['skills', 'subagents']);
+  assert.deepEqual(config.inputRoots, ['.agentbase', '.rulesync']);
+  assert.equal(updateRulesyncConfig(once, { owner: 'acme', features: ['skills', 'subagents'] }), once);
+});
+
+test('updateRulesyncConfig handles a config without sources and refuses inline agentbase sources', () => {
+  const plain = '{\n  "targets": ["claudecode"],\n  "features": ["skills"]\n}\n';
+  assert.deepEqual(jsonc(updateRulesyncConfig(plain, { owner: 'acme', features: ['skills'] })).inputRoots, ['.agentbase', '.rulesync']);
+  const inline = '{\n  "features": ["skills"],\n  "sources": [{ "source": "acme/agentbase", "ref": "v1" }]\n}\n';
+  assert.throws(() => updateRulesyncConfig(inline, { owner: 'acme', features: ['skills'] }), /one entry per line/);
+});
+
+test('dropMarketplace removes only the agentbase marketplace and its plugins', () => {
+  const settings = dropMarketplace({
+    extraKnownMarketplaces: { agentbase: { source: { repo: 'Acme/agentbase' } }, other: { source: { repo: 'x/y' } } },
+    enabledPlugins: { 'common@agentbase': true, 'lint@other': true },
   });
-  assert.deepEqual(changedSkills(before, after), ['b', 'fresh (new)', 'gone (removed)']);
-  assert.deepEqual(changedSkills(after, after), []);
-  assert.deepEqual(changedSkills({}, lock({ 'acme/agentbase': { skills: { a: {} } } })), ['a (new)']);
+  assert.deepEqual(settings, { extraKnownMarketplaces: { other: { source: { repo: 'x/y' } } }, enabledPlugins: { 'lint@other': true } });
+});
+
+test('summarize groups the vendored changes by kind', () => {
+  const nameStatus = [
+    'A\t.agentbase/skills/new-one/SKILL.md',
+    'M\t.agentbase/skills/api/SKILL.md',
+    'A\t.agentbase/skills/api/extra.md',
+    'D\t.agentbase/subagents/old.md',
+    'M\t.agentbase/hooks.json',
+  ].join('\n');
+  assert.equal(summarize(nameStatus), 'skills: api, new-one (new); subagents: old (removed); hooks: hooks.json');
+  assert.equal(summarize(''), 'none');
+});
+
+test('apply migrates a pre-.agentbase consumer end to end', () => {
+  const consumer = legacyConsumer();
+  const run = apply(consumer, 'v1.0.0', 'acme', 'web', '--from', agentbaseFixture());
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(JSON.parse(readFileSync(join(consumer, 'agentbase.json'), 'utf8')), { ref: 'v1.0.0', groups: ['common', 'web'] });
+  assert.deepEqual(readdirSync(join(consumer, '.agentbase/skills')).sort(), ['shared', 'ui']);
+  const config = jsonc(readFileSync(join(consumer, 'rulesync.jsonc'), 'utf8'));
+  assert.deepEqual(config.sources.map((s) => s.source), ['other/tools']);
+  assert.deepEqual(config.features, ['skills', 'subagents', 'hooks']);
+  assert.equal(existsSync(join(consumer, 'rulesync.lock')), true, 'kept: other/tools still needs it');
+  const settings = JSON.parse(readFileSync(join(consumer, '.claude/settings.json'), 'utf8'));
+  assert.deepEqual(settings, { permissions: { allow: ['Bash(ls)'] } });
+});
+
+test('apply removes the lockfile and fetched copies once no source is left', () => {
+  const consumer = write(tmp(), {
+    'rulesync.jsonc': '{\n  "features": ["skills"],\n  "sources": [\n    { "source": "acme/agentbase", "ref": "v0.3.0" }\n  ]\n}\n',
+    'rulesync.lock': '{}',
+    '.rulesync/skills/.curated/dropped/SKILL.md': skill('dropped'),
+    '.rulesync/skills/own/SKILL.md': skill('own'),
+  });
+  assert.equal(apply(consumer, 'v1.0.0', 'acme', 'x', '--from', agentbaseFixture()).status, 0);
+  assert.equal(existsSync(join(consumer, 'rulesync.lock')), false);
+  assert.equal(existsSync(join(consumer, '.rulesync/skills/.curated')), false);
+  assert.equal(existsSync(join(consumer, '.rulesync/skills/own/SKILL.md')), true);
+});
+
+test('apply refuses a downgrade unless forced', () => {
+  const consumer = legacyConsumer();
+  const src = agentbaseFixture();
+  const run = apply(consumer, 'v0.2.0', 'acme', 'x', '--from', src);
+  assert.notEqual(run.status, 0);
+  assert.match(run.stderr, /refusing to go from v0.3.0 back to v0.2.0/);
+  assert.equal(apply(consumer, 'v0.2.0', 'acme', 'x', '--from', src, '--force').status, 0);
+});
+
+test('apply stops on a malformed agentbase.json', () => {
+  const consumer = legacyConsumer();
+  writeFileSync(join(consumer, 'agentbase.json'), '{ "groups": ["common", "backend",] }');
+  const run = apply(consumer, 'v1.0.0', 'acme', 'x', '--from', agentbaseFixture());
+  assert.notEqual(run.status, 0);
+  assert.equal(existsSync(join(consumer, '.agentbase')), false);
+});
+
+test('apply refuses to overwrite hooks a repo wrote by hand', () => {
+  const consumer = write(tmp(), {
+    'rulesync.jsonc': '{\n  "features": ["skills"]\n}\n',
+    '.claude/settings.json': { hooks: { Stop: [{ hooks: [{ type: 'command', command: 'mine' }] }] } },
+  });
+  const run = apply(consumer, 'v1.0.0', 'acme', 'x', '--from', agentbaseFixture());
+  assert.notEqual(run.status, 0);
+  assert.match(run.stderr, /already has hooks/);
+});
+
+test('summary lists what changed in .agentbase for the PR', () => {
+  const consumer = legacyConsumer();
+  execFileSync('git', ['init', '-q'], { cwd: consumer });
+  assert.equal(apply(consumer, 'v1.0.0', 'acme', 'x', '--from', agentbaseFixture()).status, 0);
+  const out = execFileSync('node', [SCRIPT, 'summary'], { cwd: consumer, encoding: 'utf8' }).trim();
+  assert.equal(out, 'skills: shared (new); subagents: reviewer (new); hooks: hooks.json (new)');
 });
