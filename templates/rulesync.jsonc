@@ -5,8 +5,7 @@
   "targets": [__TARGETS__],
   "features": [__FEATURES__],
   "sources": [
-    // One entry per agentbase skill group (skills/<group>/). Sync bumps every ref; add or remove
-    // a whole line to change groups, never edit a ref by hand.
-__SOURCES__
+    // agentbase entries are generated from agentbase.json on adoption and on every sync; change
+    // groups there. Sources you add yourself are left alone (keep one entry per line).
   ]
 }

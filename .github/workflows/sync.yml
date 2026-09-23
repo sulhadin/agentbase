@@ -86,9 +86,7 @@ jobs:
           cp rulesync.lock "$RUNNER_TEMP/old.lock" 2>/dev/null || true
           old=$(grep -oE '"ref": *"[^"]+"' rulesync.jsonc | head -1 | sed -E 's/.*"([^"]+)"$/\1/')
           echo "old=$old" >> "$GITHUB_OUTPUT"
-          groups=$(gh api "repos/$GITHUB_REPOSITORY/contents/skills?ref=$REF" -q '[.[] | select(.type == "dir") | .name] | join(",")')
-          node ../agentbase/scripts/sync-consumer.mjs bump "$REF" "$GITHUB_REPOSITORY_OWNER" "$REPO" "$groups"
-          grep -q "\"$REF\"" rulesync.jsonc || { echo "::error::ref not bumped in rulesync.jsonc"; exit 1; }
+          node ../agentbase/scripts/sync-consumer.mjs apply "$REF" "$GITHUB_REPOSITORY_OWNER" "$REPO"
       - name: Install + generate
         if: steps.bump.outputs.skip != 'true'
         env: { GITHUB_TOKEN: "${{ steps.app.outputs.token }}" }

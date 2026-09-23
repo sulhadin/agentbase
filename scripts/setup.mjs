@@ -1,6 +1,7 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { checkbox, confirm } from '@inquirer/prompts';
+import { fetchTree } from './sync-consumer.mjs';
 
 // Several agents read the same folder, so they map to one rulesync target and one copy.
 const AGENTS = [
@@ -73,17 +74,15 @@ const selectedAgents = await ask(checkbox({
 
 // Read from the latest release, since that is the ref adopt.sh pins and consumers actually fetch.
 const release = gh('release', 'view', '--json', 'tagName', '-q', '.tagName');
-const groups = JSON.parse(
-  gh('api', `repos/${owner}/agentbase/contents/skills?ref=${release}`, '-q', '[.[] | select(.type == "dir") | .name]'),
-);
+const { groups } = fetchTree(owner, release);
 if (!groups.includes('common')) {
-  console.error(`agentbase ${release} has no skills/common/; release the grouped layout before onboarding.`);
+  console.error(`agentbase ${release} has no groups/common/; release the grouped layout before onboarding.`);
   process.exit(1);
 }
 const optionalGroups = groups.filter((g) => g !== 'common');
 const selectedGroups = optionalGroups.length
   ? await ask(checkbox({
-      message: 'Skill groups (common is always included)',
+      message: 'Groups (common is always included)',
       pageSize: 15,
       loop: false,
       choices: optionalGroups.map((g) => {

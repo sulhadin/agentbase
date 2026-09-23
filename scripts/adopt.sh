@@ -6,13 +6,13 @@ USAGE='One-time onboarding of a consumer repo. Run from the consumer repo root:
   bash <(curl -fsSL https://raw.githubusercontent.com/<owner>/agentbase/main/scripts/adopt.sh) <owner> [ref] \
        [--targets claudecode,codexcli] [--features skills] [--groups backend,web]
 Any rulesync target/feature is accepted (`npx rulesync generate --help`).
-Skill groups are folders under agentbase'"'"'s skills/: common is always included, and so is the group
-named after this repo when it exists.
+Groups are folders under agentbase'"'"'s groups/: common is always included, and so is the group
+named after this repo when it exists. The choice is recorded in agentbase.json.
 With a local clone of agentbase: AGENTBASE_DIR=../agentbase scripts/adopt.sh <owner> [ref]'
 
 TARGETS="claudecode,codexcli"
 FEATURES="skills"
-SKILL_GROUPS="common"
+SKILL_GROUPS=""
 POS=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -32,34 +32,15 @@ REF="${2:-$(gh release view --repo "$ORG/agentbase" --json tagName -q .tagName 2
 
 json_list() { printf '"%s"' "${1//,/\", \"}"; }
 TPL="${AGENTBASE_DIR:-}"
-fetch_tpl() {
-  if [ -n "$TPL" ]; then cat "$TPL/templates/$1"
-  else curl -fsSL "https://raw.githubusercontent.com/$ORG/agentbase/$REF/templates/$1"
+fetch_file() {
+  if [ -n "$TPL" ]; then cat "$TPL/$1"
+  else curl -fsSL "https://raw.githubusercontent.com/$ORG/agentbase/$REF/$1"
   fi
 }
+fetch_tpl() { fetch_file "templates/$1"; }
 
 [ -d .git ] || { echo "run from the consumer repo root" >&2; exit 1; }
 REPO_NAME=$(basename "$(git rev-parse --show-toplevel)")
-
-AVAILABLE=$(gh api "repos/$ORG/agentbase/contents/skills?ref=$REF" -q '[.[] | select(.type == "dir") | .name] | join(",")' 2>/dev/null || true)
-if [ -n "$AVAILABLE" ]; then
-  case ",$AVAILABLE," in *",$REPO_NAME,"*) SKILL_GROUPS="$SKILL_GROUPS,$REPO_NAME" ;; esac
-  for g in ${SKILL_GROUPS//,/ }; do
-    case ",$AVAILABLE," in *",$g,"*) ;; *) echo "✗ agentbase $REF has no skills/$g/ (groups: $AVAILABLE)" >&2; exit 1 ;; esac
-  done
-else
-  echo "  could not list agentbase's groups (gh not authenticated?); using: $SKILL_GROUPS"
-fi
-SKILL_GROUPS=$(printf '%s\n' ${SKILL_GROUPS//,/ } | awk '!seen[$0]++' | paste -sd, -)
-
-# rules live at the agentbase root, so only the first entry selects them; repeating it would duplicate them.
-SOURCES=""
-nl=$'\n'
-for g in ${SKILL_GROUPS//,/ }; do
-  selection='"skills": ["*"]'
-  if [ -z "$SOURCES" ]; then case ",$FEATURES," in *,rules,*) selection='"rules": ["*"], '"$selection" ;; esac; fi
-  SOURCES="${SOURCES:+$SOURCES,$nl}    { \"source\": \"$ORG/agentbase:skills/$g\", \"ref\": \"$REF\", $selection }"
-done
 
 if [ ! -d .rulesync ]; then
   echo "▸ importing existing tool config into .rulesync/ (then delete what agentbase already ships)"
@@ -73,23 +54,23 @@ if [ ! -d .rulesync ]; then
   done
 fi
 
-echo "▸ writing rulesync.jsonc (ref=$REF, targets=$TARGETS, features=$FEATURES, groups=$SKILL_GROUPS)"
-config=$(fetch_tpl rulesync.jsonc \
-  | sed -e "s#__TARGETS__#$(json_list "$TARGETS")#" -e "s#__FEATURES__#$(json_list "$FEATURES")#")
-printf '%s\n' "${config/__SOURCES__/$SOURCES}" > rulesync.jsonc
+echo "▸ writing rulesync.jsonc (ref=$REF, targets=$TARGETS, features=$FEATURES)"
+fetch_tpl rulesync.jsonc \
+  | sed -e "s#__TARGETS__#$(json_list "$TARGETS")#" -e "s#__FEATURES__#$(json_list "$FEATURES")#" > rulesync.jsonc
 
 echo "▸ .gitignore"
 if ! grep -q '.rulesync/skills/.curated/' .gitignore 2>/dev/null; then
   { [ -f .gitignore ] && [ -n "$(tail -c1 .gitignore)" ] && echo; fetch_tpl gitignore; } >> .gitignore
 fi
 
-echo "▸ .claude/settings.json (plugin marketplace)"
 mkdir -p .claude
-if [ -f .claude/settings.json ]; then
-  echo "  .claude/settings.json exists — merge templates/claude-settings.json by hand"
-else
-  fetch_tpl claude-settings.json | sed -e "s#__ORG__#$ORG#g" -e "s#__REF__#$REF#g" > .claude/settings.json
-fi
+[ -f .claude/settings.json ] || echo '{}' > .claude/settings.json
+
+echo "▸ groups, skill sources and Claude Code plugins"
+# The same script sync runs on every release, fetched from the pinned ref so both agree on the layout.
+apply_script="$(mktemp -d)/sync-consumer.mjs"
+fetch_file scripts/sync-consumer.mjs > "$apply_script"
+node "$apply_script" apply "$REF" "$ORG" "$REPO_NAME" "$SKILL_GROUPS"
 
 echo "▸ CI workflow"
 mkdir -p .github/workflows
@@ -122,7 +103,7 @@ gh repo edit "$ORG/$REPO_NAME" --add-topic agentbase-consumer 2>/dev/null \
 cat <<MSG
 
 Done. Review and commit:
-  - rulesync.jsonc, rulesync.lock, .gitignore, .claude/settings.json, .github/workflows/agentbase-check.yml
+  - agentbase.json, rulesync.jsonc, rulesync.lock, .gitignore, .claude/settings.json, .github/workflows/agentbase-check.yml
   - .rulesync/skills/     ← repo-specific skills only; delete anything agentbase already ships
   - generated tool files  ← commit them; never edit by hand
 Append to CODEOWNERS:

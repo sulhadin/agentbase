@@ -1,11 +1,13 @@
 {
   "name": "agentbase",
-  "owner": { "name": "your-org" },
+  "owner": {
+    "name": "your-org"
+  },
   "plugins": [
     {
-      "name": "agentbase",
-      "source": "./plugins/agentbase",
-      "description": "Shared Claude Code subagents and commands"
+      "name": "common",
+      "source": "./plugins/common",
+      "description": "agentbase common group: subagents, commands and hooks"
     }
   ]
 }

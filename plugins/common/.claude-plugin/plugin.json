@@ -1,0 +1,5 @@
+{
+  "name": "common",
+  "description": "agentbase common group: subagents, commands and hooks",
+  "version": "0.0.0"
+}

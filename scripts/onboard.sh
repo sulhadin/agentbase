@@ -33,14 +33,14 @@ Onboards this repo to agentbase: future agentbase releases arrive here as automa
 
 ## Before merge
 - Delete from \`.rulesync/skills/\` anything agentbase now ships, then run \`npx rulesync@16 generate\`.
-- If \`.claude/settings.json\` already existed, merge in the agentbase marketplace entry by hand.
+- Groups live in \`agentbase.json\`; change them there and the next agentbase release applies it.
 EOF
 }
 
 adoption_details() {
   local targets groups skills generated
   targets=$(grep -oE '"targets": *\[[^]]*\]' rulesync.jsonc | grep -oE '"[a-z-]+"' | tr -d '"' | grep -vx targets | paste -sd, - | sed 's/,/, /g')
-  groups=$(grep -oE 'agentbase:skills/[^"]+' rulesync.jsonc | sed 's#.*skills/##' | paste -sd, - | sed 's/,/, /g')
+  groups=$(node -e 'console.log(require("./agentbase.json").groups.join(", "))')
   skills=$(node -e 'const l=JSON.parse(require("fs").readFileSync("rulesync.lock","utf8")); console.log(Object.values(l.sources).flatMap(s=>Object.keys(s.skills??{})).join(", "))')
   generated=$(git diff --cached --name-only | sed -nE 's#^((\.[^/]+/)+skills)/[^/]+/SKILL\.md$#\1/#p' | grep -v '^\.rulesync/' | sort -u | paste -sd, - | sed 's/,/, /g')
   cat <<EOF

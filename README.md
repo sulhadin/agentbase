@@ -18,10 +18,10 @@ Teams copy the same `SKILL.md` files into every repo, and the copies drift. agen
 ```
  your-org/agentbase                   each consumer repo
  ──────────────────                   ──────────────────
- skills/<group>/*/SKILL.md ─ release ─▶ PR "chore(agentbase): update shared AI agent skills to v1.2.0"
+ groups/<group>/skills/ ── release ──▶ PR "chore(agentbase): update shared AI agent skills to v1.2.0"
                                           ├─ .claude/skills/   → Claude Code
                                           └─ .agents/skills/   → Cursor · Codex · Antigravity
- .rulesync/subagents, commands ─────────▶ Claude Code plugin (marketplace)
+ groups/<group>/subagents, commands, hooks ─▶ Claude Code plugin per group (marketplace)
 ```
 
 It is not an npm package. Consumers pin a git tag of this repo, and [rulesync](https://github.com/dyoshikawa/rulesync) fetches and converts it. Generated files are committed, so every clone and cloud agent sees them without a build step.
@@ -46,11 +46,24 @@ Nothing in the repo lists consumer repos. Sync finds them at run time as the rep
 
 ### 2. Put your content in
 
-| Put | In | Reaches |
-|---|---|---|
-| Skills | `skills/<group>/<name>/SKILL.md` (frontmatter `name` + `description`) | every tool |
-| Subagents | `.rulesync/subagents/<name>.md` | Claude Code |
-| Slash commands | `.rulesync/commands/<name>.md` | Claude Code |
+Everything lives in **groups**, and each consumer repo gets only its groups:
+
+```
+groups/
+  common/            every repo
+    skills/<name>/SKILL.md     → every agent
+    subagents/<name>.md        → Claude Code plugin "common"
+    commands/<name>.md         → Claude Code plugin "common"
+    hooks.json                 → Claude Code plugin "common"
+  backend/           repos you put in the backend group
+  web/               repos you put in the web group
+  api/               the repo named api, automatically
+```
+
+- `common` is required and reaches every consumer. Other groups are picked per repo when onboarding (step 5); a repo can be in several.
+- A group named exactly like a repo attaches to that repo automatically, also when you create it after the repo was onboarded: use it for things that belong to one repo only. So don't name a category group after a repo.
+- A group can have any mix of the four parts. Skills reach every agent; subagents, commands and hooks become one Claude Code plugin per group.
+- Skill names must be unique across groups, since a repo in two groups would otherwise get only one of them (CI checks this).
 
 A skill is a folder with one `SKILL.md`: YAML frontmatter, then the instructions in Markdown.
 
@@ -63,25 +76,11 @@ description: REST conventions for this org. Use when adding or changing an HTTP 
 2. ...
 ```
 
-`name` must match the folder name; `description` tells the agent when to load it.
+`name` must match the folder name; `description` tells the agent when to load it. Subagents, commands and `hooks.json` use [rulesync's formats](https://github.com/dyoshikawa/rulesync).
 
-**Groups.** Every skill lives in a group folder, and each consumer repo gets only its groups:
+The template ships one placeholder of each kind in `groups/common/`. Replace them with yours.
 
-```
-skills/common/     every repo
-skills/backend/    repos you put in the backend group
-skills/web/        repos you put in the web group
-skills/api/        the repo named api, automatically
-```
-
-- `common` is required and reaches every consumer.
-- Other groups are picked per repo when onboarding (step 5); a repo can be in several.
-- A group named exactly like a repo is attached to that repo automatically, also when you create it after the repo was onboarded: use it for skills that belong to one repo only. So don't name a category group after a repo.
-- Skill names must be unique across groups, since a repo in two groups would otherwise get only one of them (CI checks this).
-
-The template ships one placeholder of each kind: `skills/common/example-skill/`, `.rulesync/subagents/example-subagent.md` and `.rulesync/commands/example-command.md`. Replace them with yours.
-
-Subagents and commands are packaged into a Claude Code plugin: after touching `.rulesync/`, run `npm install && npm run plugin` and commit the regenerated `plugins/` folder (CI fails if it is stale).
+After changing subagents, commands or hooks, run `npm install && npm run plugin` and commit the regenerated `plugins/` and `.claude-plugin/marketplace.json` (CI fails if they are stale).
 
 ### 3. Create the GitHub App that opens the PRs
 
@@ -144,10 +143,11 @@ Non-interactive: `npm run onboard -- web api --targets claudecode,codexcli --gro
 
 For each repo it clones, runs [`adopt.sh`](scripts/adopt.sh) on a `chore/adopt-agentbase` branch and opens a PR. Repos already adopted, or with an open adoption PR, are skipped. The PR adds:
 
-- `rulesync.jsonc` (agentbase version, chosen agents, one source line per group) and `rulesync.lock` (exact content hashes),
+- `agentbase.json`: the repo's groups; everything below is derived from it,
+- `rulesync.jsonc` (agentbase version, chosen agents, one source line per group with skills) and `rulesync.lock` (exact content hashes),
 - the generated skill folders from the table above,
 - `.github/workflows/agentbase-check.yml`, which fails if the generated files drift from what the lock produces (e.g. someone hand-edited them),
-- `.claude/settings.json` enabling the agentbase Claude Code plugin, pinned to the same release (sync bumps it together with `rulesync.jsonc`).
+- `.claude/settings.json` enabling the Claude Code plugin of each group that has one, from the agentbase marketplace pinned to the same release. An existing file is edited in place; a plugin set to `false` stays off.
 
 It also adds the `agentbase-consumer` topic to the repo; that topic is how releases find it, so don't add it by hand.
 
@@ -200,7 +200,7 @@ That's it. From now on, every release opens a PR in every consumer repo.
 
 **In a consumer repo:**
 - A local skill in `.rulesync/skills/` with the same name overrides the shared one.
-- To change a repo's groups, add or remove whole `sources` lines in its `rulesync.jsonc` (copy the `common` line and change the path), then run `npx rulesync@16 install --update && npx rulesync@16 generate`.
+- To change a repo's groups, edit `groups` in its `agentbase.json`; the next agentbase release applies it.
 - Never hand-edit generated files; CI rejects it and the next sync overwrites it.
 - `AGENTS.md` / `CLAUDE.md` stay yours; skills-only mode never touches them.
 

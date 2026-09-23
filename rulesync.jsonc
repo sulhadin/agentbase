@@ -1,7 +1,0 @@
-{
-  "$schema": "https://github.com/dyoshikawa/rulesync/releases/latest/download/config-schema.json",
-  // This file only drives plugin generation for the Claude-only components under .rulesync/.
-  // skills/ is fetched by consumers directly through their own `sources` entry.
-  "outputRoots": { "claudecode-plugin": "./plugins/agentbase" },
-  "targets": { "claudecode-plugin": ["commands", "subagents"] }
-}
