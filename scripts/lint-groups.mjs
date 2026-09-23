@@ -43,7 +43,7 @@ export function lintGroups(root) {
 
   for (const group of listDir(join(root, 'groups')).filter((e) => e.isDirectory()).map((e) => e.name)) {
     const dir = join('groups', group);
-    // Group names become folder and source names in every consumer; claude.ai also rejects non-kebab plugin names.
+    // Group names become folder and script path names in every consumer, and hooks.json references them.
     if (!KEBAB.test(group)) errors.push(`${dir}: group names are lowercase kebab-case`);
     for (const entry of listDir(join(root, dir))) {
       if (!GROUP_ENTRIES.has(entry.name)) errors.push(`${dir}/${entry.name}: not read; a group holds ${[...GROUP_ENTRIES].join(', ')}`);
