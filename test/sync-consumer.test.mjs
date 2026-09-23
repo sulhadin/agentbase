@@ -210,3 +210,17 @@ test('summary lists what changed in .agentbase for the PR', () => {
   const out = execFileSync('node', [SCRIPT, 'summary'], { cwd: consumer, encoding: 'utf8' }).trim();
   assert.equal(out, 'skills: shared (new); subagents: reviewer (new); hooks: hooks.json (new)');
 });
+
+test('apply --set-groups replaces the groups and --targets the agents', () => {
+  const consumer = legacyConsumer();
+  const src = agentbaseFixture();
+  assert.equal(apply(consumer, 'v1.0.0', 'acme', 'x', '--groups', 'backend,web', '--from', src).status, 0);
+  assert.deepEqual(readdirSync(join(consumer, '.agentbase/skills')).sort(), ['api', 'shared', 'ui']);
+
+  const run = apply(consumer, 'v1.0.0', 'acme', 'x', '--set-groups', 'web', '--targets', 'claudecode', '--from', src);
+  assert.equal(run.status, 0, run.stderr);
+  assert.deepEqual(JSON.parse(readFileSync(join(consumer, 'agentbase.json'), 'utf8')).groups, ['common', 'web']);
+  assert.deepEqual(readdirSync(join(consumer, '.agentbase/skills')).sort(), ['shared', 'ui']);
+  assert.equal(existsSync(join(consumer, '.agentbase/commands')), false, 'backend was the only group with commands');
+  assert.deepEqual(jsonc(readFileSync(join(consumer, 'rulesync.jsonc'), 'utf8')).targets, ['claudecode']);
+});

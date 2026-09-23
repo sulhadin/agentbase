@@ -1,5 +1,6 @@
 // Keeps a consumer checkout in step with an agentbase release. Run from the consumer's root:
-//   node sync-consumer.mjs apply <ref> <owner> <repo> [--groups a,b] [--from <agentbase checkout>] [--force]
+//   node sync-consumer.mjs apply <ref> <owner> <repo> [--groups a,b | --set-groups a,b] [--targets a,b]
+//                                [--from <agentbase checkout>] [--force]
 //   node sync-consumer.mjs summary
 // The groups' content is copied into .agentbase/ (committed) and rulesync generates every agent's files
 // from it plus the repo's own .rulesync/, so nothing is fetched at generate time and cloud agents see it all.
@@ -106,7 +107,7 @@ export function featuresFor(existing, roots) {
 
 // Edits rulesync.jsonc as text to keep its comments: sets features and inputRoots, and drops the
 // agentbase `sources` entries of consumers adopted before .agentbase/ existed.
-export function updateRulesyncConfig(text, { owner, features }) {
+export function updateRulesyncConfig(text, { owner, features, targets }) {
   const list = (xs) => `[${xs.map((x) => `"${x}"`).join(', ')}]`;
   let lines = text.split('\n');
 
@@ -123,6 +124,12 @@ export function updateRulesyncConfig(text, { owner, features }) {
       const fixed = body.map((l, i) => (entries.includes(i) ? l.replace(/\s*,?\s*$/, i === entries.at(-1) ? '' : ',') : l));
       lines = [...lines.slice(0, open + 1), ...fixed, ...lines.slice(close)];
     }
+  }
+
+  if (targets) {
+    const targetsAt = lines.findIndex((l) => /"targets":\s*\[[^\]]*\]/.test(l));
+    if (targetsAt < 0) throw new Error('rulesync.jsonc needs a one-line "targets" array');
+    lines[targetsAt] = lines[targetsAt].replace(/("targets":\s*)\[[^\]]*\]/, `$1${list(targets)}`);
   }
 
   const featuresAt = lines.findIndex((l) => /"features":\s*\[[^\]]*\]/.test(l));
@@ -193,7 +200,7 @@ export function fetchTree(owner, ref) {
   return parseTree(out.split('\n').filter(Boolean));
 }
 
-function apply(ref, owner, repo, { groups: requested = [], from, force = false }) {
+function apply(ref, owner, repo, { groups: requested = [], setGroups, targets, from, force = false }) {
   if (!existsSync('rulesync.jsonc')) throw new Error('run from a consumer root with rulesync.jsonc');
   const config = readFileSync('rulesync.jsonc', 'utf8');
   const legacyRef = config.match(new RegExp(`"source":\\s*"${escapeRegExp(owner)}/agentbase[^"]*"[^}]*"ref":\\s*"([^"]+)"`, 'i'))?.[1];
@@ -204,7 +211,10 @@ function apply(ref, owner, repo, { groups: requested = [], from, force = false }
   const agentbaseDir = from ?? downloadAgentbase(owner, ref);
   const available = listDir(join(agentbaseDir, 'groups')).filter((e) => e.isDirectory()).map((e) => e.name).sort();
   if (!available.includes('common')) throw new Error(`agentbase ${ref} has no groups/common/`);
-  const { groups, dropped } = resolveGroups(membership?.groups ?? null, { available, repo, requested });
+  // --set-groups replaces the membership (reconfiguring); --groups only adds to it (adopting, syncing).
+  const { groups, dropped } = setGroups
+    ? resolveGroups(null, { available, repo, requested: setGroups })
+    : resolveGroups(membership?.groups ?? null, { available, repo, requested });
 
   const hadVendor = existsSync(VENDOR_DIR);
   vendorGroups(agentbaseDir, groups, VENDOR_DIR);
@@ -220,7 +230,7 @@ function apply(ref, owner, repo, { groups: requested = [], from, force = false }
   }
 
   const existing = JSON.parse(config.replace(/^\s*\/\/.*$/gm, '').match(/"features":\s*(\[[^\]]*\])/)?.[1] ?? '[]');
-  const updated = updateRulesyncConfig(config, { owner, features: featuresFor(existing, INPUT_ROOTS) });
+  const updated = updateRulesyncConfig(config, { owner, features: featuresFor(existing, INPUT_ROOTS), targets });
   writeFileSync('rulesync.jsonc', updated);
   if (existsSync('rulesync.lock') && !/"sources":\s*\[[^\]]*\{/s.test(updated.replace(/^\s*\/\/.*$/gm, ''))) {
     rmSync('rulesync.lock');
@@ -246,6 +256,8 @@ function parseArgs(args) {
   const positional = [];
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--groups') opts.groups = (args[++i] ?? '').split(',').filter(Boolean);
+    else if (args[i] === '--set-groups') opts.setGroups = (args[++i] ?? '').split(',').filter(Boolean);
+    else if (args[i] === '--targets') opts.targets = (args[++i] ?? '').split(',').filter(Boolean);
     else if (args[i] === '--from') opts.from = args[++i];
     else if (args[i] === '--force') opts.force = true;
     else positional.push(args[i]);
@@ -257,7 +269,8 @@ function main([command, ...args]) {
   try {
     if (command === 'apply') {
       const { positional: [ref, owner, repo], opts } = parseArgs(args);
-      if (!ref || !owner || !repo) throw new Error('usage: apply <ref> <owner> <repo> [--groups a,b] [--from dir] [--force]');
+      if (!ref || !owner || !repo) throw new Error('usage: apply <ref> <owner> <repo> [--groups a,b | --set-groups a,b] [--targets a,b] [--from dir] [--force]');
+      if (opts.targets?.length === 0) throw new Error('--targets needs at least one agent');
       apply(ref, owner, repo, opts);
     } else if (command === 'summary') {
       execFileSync('git', ['add', '--all', '--intent-to-add', VENDOR_DIR]);

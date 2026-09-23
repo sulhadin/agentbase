@@ -197,11 +197,13 @@ That's it. From now on, every release opens a PR in every consumer repo it chang
 
 **Release from another branch:** set the Actions variable `RELEASE_BRANCH` (*Settings → Secrets and variables → Actions → Variables*) to release that branch instead of `main`, e.g. to keep `main` as a clean template while your own content lives elsewhere. The release workflow then refuses to run from any other branch; point the `release` environment at the same branch.
 
+**Change a repo's groups or agents:** `npm run setup` → *Reconfigure an adopted repo*, pick the repo, adjust the prefilled groups and agents. Or non-interactively: `npm run reconfigure -- web --groups backend --targets claudecode,codexcli` (each flag sets the full list; `common` and the repo's own group are always kept). It opens a PR in that repo that keeps its agentbase release and regenerates for the new selection.
+
 **Roll out to one repo only:** *Actions → sync consumers → Run workflow* on the release branch, set `ref` to a tag (e.g. `v1.2.0`) and `repo` to the repo name (e.g. `web`). Sync refuses to move a repo to an older tag unless you tick `force`.
 
 **In a consumer repo:**
 - `.agentbase/` is agentbase's; `.rulesync/` is the repo's own and wins on a name clash, so a local skill with the same name overrides the shared one.
-- To change a repo's groups, edit `groups` in its `agentbase.json`; the next agentbase release applies it.
+- To change a repo's groups or agents, use reconfigure (above). Editing `groups` in `agentbase.json` by hand also works; the next agentbase release applies it.
 - Never hand-edit generated files (`.claude/skills/`, `.agents/skills/`, …): CI rejects it and the next sync deletes it. A skill an agent writes there itself belongs in `.rulesync/skills/`.
 - Repo-specific hooks go in the agentbase group named after the repo, not in `.claude/settings.json`, which generation rewrites.
 - `AGENTS.md` / `CLAUDE.md` stay yours; agentbase never touches them.
