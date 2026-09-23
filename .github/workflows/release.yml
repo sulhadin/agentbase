@@ -1,5 +1,6 @@
-# Run by hand from main. Picks the version from conventional commits since the last tag,
-# updates CHANGELOG.md, tags, publishes the GitHub release and rolls it out to consumers.
+# Run by hand from the release branch: main, or the repo variable RELEASE_BRANCH when set.
+# Picks the version from conventional commits since the last tag, updates CHANGELOG.md, tags,
+# publishes the GitHub release and rolls it out to consumers.
 name: release
 on:
   workflow_dispatch:
@@ -9,7 +10,15 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.release.outputs.tag }}
+    env:
+      RELEASE_BRANCH: ${{ vars.RELEASE_BRANCH || 'main' }}
     steps:
+      # semantic-release silently skips other branches, which would read as "nothing to release".
+      - name: Only from the release branch
+        if: github.ref_name != env.RELEASE_BRANCH
+        run: |
+          echo "::error::Run this workflow from '$RELEASE_BRANCH', not '${{ github.ref_name }}'."
+          exit 1
       # The App token (not GITHUB_TOKEN) lets the release commit through main's branch protection.
       - uses: actions/create-github-app-token@v3
         id: app

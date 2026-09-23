@@ -1,5 +1,6 @@
 module.exports = {
-  branches: ['main'],
+  // Lets a repo keep main as the clean template and release its own content from another branch.
+  branches: [process.env.RELEASE_BRANCH || 'main'],
   tagFormat: 'v${version}',
   plugins: [
     ['@semantic-release/commit-analyzer', { preset: 'conventionalcommits' }],
