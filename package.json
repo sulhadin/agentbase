@@ -5,6 +5,7 @@
   "description": "Shared AI agent skills, subagents, commands and hooks, rolled out to every consumer repo as PRs.",
   "scripts": {
     "onboard": "scripts/onboard.sh",
+    "reconfigure": "scripts/reconfigure.sh",
     "setup": "node scripts/setup.mjs",
     "test": "node --test"
   },
