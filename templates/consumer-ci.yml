@@ -17,9 +17,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.AGENTBASE_READ_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           npx rulesync@16 install --frozen
-          npx rulesync@16 generate
+          npx rulesync@16 generate --delete
           git diff --exit-code || {
-            echo "::error::Generated AI config is out of date or was hand-edited. Run: npx rulesync install --frozen && npx rulesync generate"
+            echo "::error::Generated AI config is out of date or was hand-edited. Run: npx rulesync install --frozen && npx rulesync generate --delete"
             exit 1
           }
       # An ignored generated file never shows up in the diff above, so drift there would pass silently.

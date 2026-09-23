@@ -8,7 +8,8 @@
     "doctor": "rulesync doctor",
     "check": "npm run plugin && git diff --exit-code -- plugins/",
     "onboard": "scripts/onboard.sh",
-    "setup": "node scripts/setup.mjs"
+    "setup": "node scripts/setup.mjs",
+    "test": "node --test"
   },
   "devDependencies": {
     "@inquirer/prompts": "^8.7.2",

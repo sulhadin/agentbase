@@ -11,14 +11,24 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      - name: every skill has SKILL.md with name + description
+      - name: skills are grouped, well-formed and uniquely named
         run: |
           set -e
-          for d in skills/*/; do
-            f="$d/SKILL.md"
-            [ -f "$f" ] || { echo "::error::$d has no SKILL.md"; exit 1; }
-            grep -q '^name:' "$f" && grep -q '^description:' "$f" || { echo "::error file=$f::needs name and description"; exit 1; }
+          [ -d skills/common ] || { echo "::error::skills/common/ is required; every consumer gets it"; exit 1; }
+          for f in skills/*/SKILL.md; do
+            [ -e "$f" ] && { echo "::error file=$f::skills live in a group: skills/<group>/<skill>/SKILL.md"; exit 1; }
           done
+          for d in skills/*/*/; do
+            f="${d}SKILL.md"
+            [ -f "$f" ] || { echo "::error::$d has no SKILL.md"; exit 1; }
+            grep -q '^description:' "$f" || { echo "::error file=$f::needs a description"; exit 1; }
+            name=$(sed -n 's/^name: *//p' "$f" | head -1)
+            [ "$name" = "$(basename "$d")" ] || { echo "::error file=$f::name '$name' must match its folder '$(basename "$d")'"; exit 1; }
+          done
+          # rulesync keeps the first skill of a given name across a consumer's groups and drops the rest silently.
+          dupes=$(for d in skills/*/*/; do basename "$d"; done | sort | uniq -d)
+          [ -z "$dupes" ] || { echo "::error::skill names must be unique across groups: $dupes"; exit 1; }
+      - run: npm test
       - run: npm run doctor
       - name: plugin output is up to date
         run: npm run check

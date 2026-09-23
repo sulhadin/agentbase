@@ -2,7 +2,7 @@
 set -euo pipefail
 
 USAGE='Adopt agentbase in consumer repos and open a PR in each:
-  npm run onboard -- <repo>... [--targets claudecode,codexcli] [--features skills]
+  npm run onboard -- <repo>... [--targets claudecode,codexcli] [--features skills] [--groups backend,web]
 <repo> is a name under the agentbase owner, or owner/name.
 The GitHub App must have access to each repo for later sync PRs.'
 
@@ -14,8 +14,8 @@ REPOS=()
 ADOPT_FLAGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
-    --targets|--features) ADOPT_FLAGS+=("$1" "$2"); shift 2 ;;
-    --targets=*|--features=*) ADOPT_FLAGS+=("$1"); shift ;;
+    --targets|--features|--groups) ADOPT_FLAGS+=("$1" "$2"); shift 2 ;;
+    --targets=*|--features=*|--groups=*) ADOPT_FLAGS+=("$1"); shift ;;
     -h|--help) echo "$USAGE"; exit 0 ;;
     *) REPOS+=("$1"); shift ;;
   esac
@@ -38,14 +38,16 @@ EOF
 }
 
 adoption_details() {
-  local targets skills generated
+  local targets groups skills generated
   targets=$(grep -oE '"targets": *\[[^]]*\]' rulesync.jsonc | grep -oE '"[a-z-]+"' | tr -d '"' | grep -vx targets | paste -sd, - | sed 's/,/, /g')
+  groups=$(grep -oE 'agentbase:skills/[^"]+' rulesync.jsonc | sed 's#.*skills/##' | paste -sd, - | sed 's/,/, /g')
   skills=$(node -e 'const l=JSON.parse(require("fs").readFileSync("rulesync.lock","utf8")); console.log(Object.values(l.sources).flatMap(s=>Object.keys(s.skills??{})).join(", "))')
   generated=$(git diff --cached --name-only | sed -nE 's#^((\.[^/]+/)+skills)/[^/]+/SKILL\.md$#\1/#p' | grep -v '^\.rulesync/' | sort -u | paste -sd, - | sed 's/,/, /g')
   cat <<EOF
 Pin $OWNER/agentbase $1 in rulesync.jsonc and generate its
 skills for $targets.
 
+Groups: $groups
 Skills: $skills
 Generated: $generated
 EOF
@@ -76,7 +78,8 @@ for repo in "${REPOS[@]}"; do
     gh repo clone "$repo" "$dir" -- --quiet
     cd "$dir"
     git switch -q -c "$BRANCH"
-    bash "$ROOT/scripts/adopt.sh" "$OWNER" ${ADOPT_FLAGS[@]+"${ADOPT_FLAGS[@]}"}
+    # Templates from this checkout, so they always match the adopt.sh that fills them in.
+    AGENTBASE_DIR="$ROOT" bash "$ROOT/scripts/adopt.sh" "$OWNER" ${ADOPT_FLAGS[@]+"${ADOPT_FLAGS[@]}"}
     ref=$(grep -oE '"ref": *"[^"]+"' rulesync.jsonc | head -1 | sed -E 's/.*"([^"]+)"$/\1/')
     git add -A
     title="chore(agentbase): adopt shared AI agent skills at $ref"
