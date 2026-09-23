@@ -1,6 +1,6 @@
 {
   "name": "agentbase",
-  "owner": { "name": "sulhadin" },
+  "owner": { "name": "your-org" },
   "plugins": [
     {
       "name": "agentbase",
