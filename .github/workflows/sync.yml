@@ -76,6 +76,18 @@ jobs:
           echo "old=$old" >> "$GITHUB_OUTPUT"
           sed -i -E '/\/agentbase"/ s/"ref": *"[^"]+"/"ref": "'"$REF"'"/' rulesync.jsonc
           grep -q "\"$REF\"" rulesync.jsonc || { echo "::error::ref not bumped in rulesync.jsonc"; exit 1; }
+          # Pins the Claude Code plugin marketplace to the same tag; without a ref it follows the default branch,
+          # which may be a template rather than the released content. Older consumers get the ref added.
+          if [ -f .claude/settings.json ]; then
+            node -e '
+              const fs = require("fs"), [file, ref] = process.argv.slice(1);
+              const pin = (line) => /"ref":\s*"[^"]*"/.test(line)
+                ? line.replace(/("ref":\s*")[^"]*"/, `$1${ref}"`)
+                : line.replace(/("repo":\s*"[^"]*\/agentbase")/, `$1, "ref": "${ref}"`);
+              const text = fs.readFileSync(file, "utf8");
+              fs.writeFileSync(file, text.split("\n").map((l) => /"repo":\s*"[^"]*\/agentbase"/.test(l) ? pin(l) : l).join("\n"));
+            ' .claude/settings.json "$REF"
+          fi
       - name: Install + generate
         if: steps.bump.outputs.skip != 'true'
         env: { GITHUB_TOKEN: "${{ steps.app.outputs.token }}" }

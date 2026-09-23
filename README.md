@@ -132,7 +132,7 @@ For each repo it clones, runs [`adopt.sh`](scripts/adopt.sh) on a `chore/adopt-a
 - `rulesync.jsonc` (agentbase version + chosen agents) and `rulesync.lock` (exact content hashes),
 - the generated skill folders from the table above,
 - `.github/workflows/agentbase-check.yml`, which fails if the generated files drift from what the lock produces (e.g. someone hand-edited them),
-- `.claude/settings.json` enabling the agentbase Claude Code plugin.
+- `.claude/settings.json` enabling the agentbase Claude Code plugin, pinned to the same release (sync bumps it together with `rulesync.jsonc`).
 
 It also adds the `agentbase-consumer` topic to the repo; that topic is how releases find it, so don't add it by hand.
 

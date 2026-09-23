@@ -67,7 +67,7 @@ mkdir -p .claude
 if [ -f .claude/settings.json ]; then
   echo "  .claude/settings.json exists — merge templates/claude-settings.json by hand"
 else
-  fetch_tpl claude-settings.json | sed "s#__ORG__#$ORG#g" > .claude/settings.json
+  fetch_tpl claude-settings.json | sed -e "s#__ORG__#$ORG#g" -e "s#__REF__#$REF#g" > .claude/settings.json
 fi
 
 echo "▸ CI workflow"
