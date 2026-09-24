@@ -22,7 +22,7 @@ Any name works. Private is the safer default: the repo holds your agents' prompt
 | `package.json` | pins agentspread for `npm run onboard`, `npm run reconfigure` and `npm run lint` |
 | `README.md`, `.gitignore` | a short guide for your team; `node_modules/` ignored |
 
-The workflows call agentspread's reusable workflows at a pinned version. Nothing in the content repo lists consumer repos: sync finds them at run time by the `agentspread-consumer` topic.
+The workflows call agentspread's reusable workflows at a pinned version. When a new agentspread version is out, Dependabot opens two PRs: one for the pins in `.github/workflows/`, one for `package.json`. Merge both so the workflows and the CLI stay on the same version. Nothing in the content repo lists consumer repos: sync finds them at run time by the `agentspread-consumer` topic.
 
 ## 2. Put your content in
 
@@ -51,13 +51,7 @@ Non-interactive: `npx agentspread onboard web api --targets claudecode,codexcli 
 
 ## 6. Check it works
 
-Merge the adoption PRs, then roll the latest release out by hand. Like the release, it must run from the release branch, since both use the `release` environment:
-
-```bash
-gh workflow run agentspread-sync.yml --repo <org>/agentspread-config -f ref=$(gh release view --repo <org>/agentspread-config --json tagName -q .tagName)
-```
-
-The *sync consumers* run lists your repos under `rollout`. A repo already on that release gets no PR; one whose adoption PR isn't merged yet is skipped with a notice.
+Merge the adoption PRs, then roll the latest release out with a [manual sync](manual-sync.md), leaving `repo` empty. The run should list your repos under `rollout`.
 
 From now on, every release opens a PR in every consumer repo it changes.
 

@@ -37,10 +37,13 @@ You need `gh` (logged in), Node 22+, and admin rights on the org. The full walkt
    cd agentspread-config
    npx agentspread init
    ```
+   ![npx agentspread init: creates the content repo's workflows, example groups and package.json, then prints the next steps](docs/assets/init.gif)
 2. **Add your content** under `groups/`: see [Writing groups](docs/groups.md).
 3. **Create the GitHub App** that opens the PRs: see [The GitHub App](docs/github-app.md).
 4. **Release:** commit with a `feat:` message, then run the **release** workflow in the content repo's Actions tab. See [Releasing](docs/releasing.md).
-5. **Onboard repos:** `npm install && npm run onboard`, pick repos, agents and groups, and merge the adoption PRs. See [Consumer repos](docs/consumer-repos.md).
+5. **Onboard repos:** in the content repo, run `npm install` and then `npm run onboard`. Pick the repos, the agents they use and their groups, then merge the adoption PR each repo gets. See [Consumer repos](docs/consumer-repos.md).
+
+   ![npm run onboard: pick a repo, keep the default agents, tick a group, review the summary](docs/assets/onboard.gif)
 
 ## Day to day
 
@@ -71,26 +74,23 @@ The PR keeps the repo on its current release and only regenerates its files for 
 
 Without prompts: `npx agentspread reconfigure web --groups backend --targets claudecode,codexcli`. Each flag replaces the whole list; `common` and the repo's own group are always kept.
 
-### Roll out a release to one repo
+### Sync by hand
 
-1. In the content repo's **Actions** tab, pick the **sync consumers** workflow and click **Run workflow**.
-2. Set `ref` to the tag to roll out (e.g. `v1.2.0`) and `repo` to the repo name (e.g. `web`). Leave `repo` empty to roll out to every consumer.
-3. Tick `force` only to move a repo back to an older tag; sync refuses that otherwise.
-
-### Update agentspread
-
-Dependabot checks weekly and opens two PRs in the content repo: one for the version pins in `.github/workflows/`, one for `package.json`. Merge both so the workflows and the CLI stay on the same version. Consumer repos pick up the new engine with the content repo's next release.
+To roll an existing release out again, to one repo or to all, without cutting a new release, see [Manual sync](docs/manual-sync.md).
 
 ## Docs
 
-- [Setup walkthrough](docs/setup.md)
-- [Writing groups](docs/groups.md)
-- [Releasing](docs/releasing.md)
-- [The GitHub App](docs/github-app.md)
-- [Consumer repos](docs/consumer-repos.md)
-- [Security](docs/security.md)
-- [Why agentspread over plain rulesync](docs/why-not-rulesync.md)
-- [Developing agentspread](docs/development.md)
+| Page | What it covers |
+|---|---|
+| [Setup walkthrough](docs/setup.md) | First-time setup from an empty org to the first consumer PR, step by step |
+| [Writing groups](docs/groups.md) | How to lay out skills, subagents, commands and hooks, and what the lint checks |
+| [The GitHub App](docs/github-app.md) | Creating the bot that opens the PRs, storing its key and installing it |
+| [Releasing](docs/releasing.md) | How versions are chosen, the first release, and cutting a release |
+| [Manual sync](docs/manual-sync.md) | Rolling an existing release out again, to one repo or to all |
+| [Consumer repos](docs/consumer-repos.md) | What a repo gets when it is onboarded, and the rules for living with it |
+| [Security](docs/security.md) | What to review before a release, and how the workflows limit access |
+| [Why agentspread over plain rulesync](docs/why-not-rulesync.md) | What agentspread adds on top of rulesync, and when rulesync alone is enough |
+| [Developing agentspread](docs/development.md) | Working on this repo and publishing a new version |
 
 ## License
 

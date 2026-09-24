@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Stand-in for gh while recording the setup demo: answers the calls setup makes with a made-up org,
+// Stand-in for gh while recording the demos in docs/assets: answers the calls setup makes with a made-up org,
 // so the recording shows no real repos and never touches GitHub.
 const args = process.argv.slice(2).join(' ');
 const topic = [{ name: 'agentspread-consumer' }];
@@ -18,7 +18,12 @@ const files = {
 const tree = ['common', 'backend', 'frontend', 'web'].map((g) => `groups/${g}/skills/example/SKILL.md`);
 
 let out;
-if (args.startsWith('repo view')) out = 'acme/agentspread-config';
+if (args.startsWith('repo create')) {
+  const name = args.split(' ')[2].split('/').pop();
+  require('node:fs').mkdirSync(name, { recursive: true });
+  out = `✓ Created repository acme/${name} on github.com\n  https://github.com/acme/${name}`;
+} else if (args.startsWith('repo view')) out = 'acme/agentspread-config';
+else if (args.startsWith('release view')) out = 'v1.4.0';
 else if (args.startsWith('repo list')) out = JSON.stringify(repos);
 else if (/^api repos\/acme\/[^/]+\/git\/trees\//.test(args)) out = tree.join('\n');
 else {

@@ -148,6 +148,7 @@ if (mode === 'reconfigure') {
     required: true,
     choices: repos.map((r) => ({
       name: `${r.name}${r.isPrivate ? '  (private)' : ''}`,
+      short: r.name,
       value: r.name,
       disabled: adopted.has(r.name) && 'already adopted',
     })),
