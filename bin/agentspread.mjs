@@ -28,7 +28,7 @@ if (command === '--version' || command === '-v') {
   process.exit(command && command !== '--help' && command !== '-h' ? 1 : 0);
 } else {
   const interactive = !args.length && (command === 'onboard' || command === 'reconfigure');
-  const [runner, script, ...preset] = interactive ? ['node', INTERACTIVE, command] : (ALIASES[command] ?? COMMANDS[command]);
+  const [runner, script, preset] = interactive ? ['node', INTERACTIVE, [command]] : [...(ALIASES[command] ?? COMMANDS[command]).slice(0, 2), []];
   const run = spawnSync(runner, [`${root}${script}`, ...preset, ...args], {
     stdio: 'inherit',
     env: { ...process.env, AGENTSPREAD_ROOT: root, AGENTSPREAD_VERSION: version },
