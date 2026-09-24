@@ -10,6 +10,7 @@ groups/
     commands/<name>.md       used by Claude Code
     hooks.json               used by Claude Code and Codex
     scripts/                 files the hooks run, found at .agentspread/scripts/common/…
+    AGENTS.md                instructions added to each repo's AGENTS.md (and CLAUDE.md, if it has one)
   backend/                   repos you put in the backend group
   api/                       the repo named api, automatically
 ```
@@ -32,6 +33,24 @@ description: REST conventions for this org. Use when adding or changing an HTTP 
 ```
 
 `name` must match the folder name; `description` tells the agent when to load it.
+
+## Instructions (AGENTS.md)
+
+A group's `AGENTS.md` holds plain Markdown instructions every agent should follow, like a repo-level `AGENTS.md` you would write by hand.
+
+In each consumer repo, the `AGENTS.md` files of its groups are joined (`common` first, the repo's own group last) and written into a section of the repo's own `AGENTS.md`. The section sits between two HTML comments, which don't show when the file is rendered:
+
+```markdown
+# The repo's own notes, untouched
+
+<!-- agentspread:start (managed by agentspread; edits inside are overwritten on the next sync) -->
+Instructions from the groups' AGENTS.md files
+<!-- agentspread:end -->
+```
+
+Only the lines between the markers are agentspread's. If the repo has no `AGENTS.md`, it is created; if it has one without the markers, the section is added at the end. If the groups stop shipping instructions, the section is removed, and so is an `AGENTS.md` that held nothing else.
+
+Claude Code reads `AGENTS.md` only when a repo has no `CLAUDE.md`. So if the repo has its own `CLAUDE.md`, the same section goes there too. `CLAUDE.md` is never created, and it is left alone when it is a symlink to `AGENTS.md` or imports it (`@AGENTS.md` anywhere in the file), since Claude then reads the section already.
 
 ## Subagents, commands and hooks
 

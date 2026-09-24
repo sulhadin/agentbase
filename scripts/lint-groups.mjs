@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const KEBAB = /^[a-z0-9]+(-[a-z0-9]+)*$/;
-const GROUP_ENTRIES = new Set(['skills', 'subagents', 'commands', 'scripts', 'hooks.json', 'README.md']);
+const GROUP_ENTRIES = new Set(['skills', 'subagents', 'commands', 'scripts', 'hooks.json', 'AGENTS.md', 'README.md']);
 const listDir = (dir) => (existsSync(dir) ? readdirSync(dir, { withFileTypes: true }) : []);
 
 export function frontmatter(text) {
@@ -75,6 +75,11 @@ export function lintGroups(root) {
         for (const flag of reviewFlags(text, fm ?? {})) warnings.push(`${where}: ${flag}`);
         claim(kind.slice(0, -1), file.name.replace(/\.md$/, ''), where);
       }
+    }
+
+    const instructions = join(root, dir, 'AGENTS.md');
+    if (existsSync(instructions) && /^<!-- agentspread:(start|end)/m.test(readFileSync(instructions, 'utf8'))) {
+      errors.push(`${dir}/AGENTS.md: must not start a line with an agentspread:start/end marker, which mark the section it is copied into`);
     }
 
     const hooksFile = join(root, dir, 'hooks.json');

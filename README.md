@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-<b>Write your AI agent skills, subagents, commands and hooks once. Every repo gets them as a PR.</b><br>
+<b>Write your AI agent instructions, skills, subagents, commands and hooks once. Every repo gets them as a PR.</b><br>
 Claude Code · Codex · Cursor · Antigravity · Copilot · OpenCode · and more
 </p>
 
@@ -23,6 +23,8 @@ Teams copy the same agent config into every repo, and the copies drift. agentspr
  groups/web/     ─┘                            .claude/           skills, agents, commands, hooks for Claude Code
                                                .agents/skills/    skills for Codex, Cursor, Antigravity, Copilot, OpenCode
                                                .codex/            agents, hooks for Codex
+                                               AGENTS.md          a shared section of instructions; the rest stays the repo's
+                                               CLAUDE.md          the same section, only if the repo has one
 ```
 
 agentspread is the engine: an npm package (`npx agentspread …`) plus reusable GitHub workflows. Your **content repo** holds only your groups and three small workflow files that call agentspread at a pinned version, and Dependabot opens a PR when a new agentspread version is out. Sync copies each release into the consumer's committed `.agentspread/`, and [rulesync](https://github.com/dyoshikawa/rulesync) generates each tool's files from it. Everything is committed, so every clone and cloud agent session sees it without a build step or a token.
@@ -83,7 +85,7 @@ To roll an existing release out again, to one repo or to all, without cutting a 
 | Page | What it covers |
 |---|---|
 | [Setup walkthrough](docs/setup.md) | First-time setup from an empty org to the first consumer PR, step by step |
-| [Writing groups](docs/groups.md) | How to lay out skills, subagents, commands and hooks, and what the lint checks |
+| [Writing groups](docs/groups.md) | How to lay out instructions, skills, subagents, commands and hooks, and what the lint checks |
 | [The GitHub App](docs/github-app.md) | Creating the bot that opens the PRs, storing its key and installing it |
 | [Releasing](docs/releasing.md) | How versions are chosen, the first release, and cutting a release |
 | [Manual sync](docs/manual-sync.md) | Rolling an existing release out again, to one repo or to all |

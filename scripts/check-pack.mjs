@@ -15,6 +15,7 @@ const REQUIRED = [
   'templates/content/groups/common/skills/example-skill/SKILL.md',
   'templates/content/groups/common/subagents/example-subagent.md',
   'templates/content/groups/common/commands/example-command.md',
+  'templates/content/groups/common/AGENTS.md',
 ];
 const [pack] = JSON.parse(readFileSync(0, 'utf8'));
 const shipped = new Set(pack.files.map((f) => f.path));

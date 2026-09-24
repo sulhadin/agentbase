@@ -59,7 +59,7 @@ echo "▸ generating agent files"
 npx --yes rulesync@16 generate --delete
 
 echo "▸ checking .gitignore does not hide generated files"
-ignored=$(git ls-files --others --ignored --exclude-standard -- .agentspread .claude .agents .codex .github \
+ignored=$(git ls-files --others --ignored --exclude-standard -- .agentspread AGENTS.md .claude .agents .codex .github \
   .cursor .opencode .cline .roo .kiro .junie .warp .qwen .augment | grep -v '\.local\.' || true)
 if [ -n "$ignored" ]; then
   echo "✗ .gitignore hides these generated files, so they would never be committed:" >&2
@@ -79,6 +79,7 @@ Done. Review and commit everything, generated files included:
   - agentspread.json          ← the content repo, its release and this repo's groups
   - .agentspread/             ← $SOURCE at $REF; never edit by hand
   - rulesync.jsonc, .github/workflows/agentspread-check.yml, generated agent folders
+  - AGENTS.md, CLAUDE.md      ← agentspread's section between its markers (CLAUDE.md only if it existed); the rest is yours
   - .rulesync/                ← this repo's own skills, subagents and commands; delete any that $SOURCE now ships
 Append to CODEOWNERS (use a team, e.g. @org/platform, for an organization):
 MSG

@@ -24,9 +24,31 @@ jobs:
             echo "::error::Generated agent files are out of date or were hand-edited. Run: npx rulesync@16 generate --delete"
             exit 1
           }
+      - name: Check agentspread's section in AGENTS.md and CLAUDE.md
+        # Only the section between the agentspread markers is checked; the rest of each file is the repo's.
+        # CLAUDE.md carries it only if the repo has its own CLAUDE.md that neither links to nor imports AGENTS.md.
+        run: |
+          node -e '
+            const fs = require("fs");
+            const read = (f) => (fs.existsSync(f) ? fs.readFileSync(f, "utf8") : null);
+            const sectionOf = (f) => read(f)?.match(/^<!-- agentspread:start[^>\n]*-->\r?\n([\s\S]*?)\r?\n<!-- agentspread:end -->/m)?.[1].trim() ?? null;
+            const shared = read(".agentspread/instructions.md")?.trim() ?? null;
+            const hasClaude = fs.existsSync("CLAUDE.md") && fs.statSync("CLAUDE.md").isFile();
+            const same = hasClaude && fs.existsSync("AGENTS.md") && fs.realpathSync("CLAUDE.md") === fs.realpathSync("AGENTS.md");
+            const claudeWants = hasClaude && !same && !/(^|\s)@(\.\/)?AGENTS\.md(?=\s|$)/m.test(read("CLAUDE.md").replace(/^<!-- agentspread:start[^>\n]*-->[\s\S]*?^<!-- agentspread:end -->/m, ""));
+            const expected = { "AGENTS.md": shared, ...(hasClaude && !same ? { "CLAUDE.md": claudeWants ? shared : null } : {}) };
+            let failed = false;
+            for (const [file, want] of Object.entries(expected)) {
+              const section = sectionOf(file);
+              if (section === want) continue;
+              console.log(`::error::${file}: the agentspread section is ${section === null ? "missing" : want === null ? "not expected here" : "out of date or hand-edited"}. Run npx agentspread instructions to rewrite it; to change the instructions themselves, edit the content repo.`);
+              failed = true;
+            }
+            process.exit(failed ? 1 : 0);
+          '
       - name: Fail if .gitignore hides generated files
         run: |
-          ignored=$(git ls-files --others --ignored --exclude-standard -- .agentspread .claude .agents .codex .github \
+          ignored=$(git ls-files --others --ignored --exclude-standard -- .agentspread AGENTS.md .claude .agents .codex .github \
             .cursor .opencode .cline .roo .kiro .junie .warp .qwen .augment | grep -v '\.local\.' || true)
           [ -z "$ignored" ] || {
             echo "::error::.gitignore hides generated files, so they are never committed: $(echo "$ignored" | paste -sd' ' -)"

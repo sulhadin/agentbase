@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
   featuresFor, isDowngrade, mergeHooks, readMembership, resolveGroups, summarize,
-  updateRulesyncConfig, vendorGroups,
+  updateRulesyncConfig, vendorGroups, writeManagedBlock,
 } from '../scripts/sync-consumer.mjs';
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), '..', 'scripts', 'sync-consumer.mjs');
@@ -59,6 +59,8 @@ test('resolveGroups always includes common and the group named after the repo', 
   assert.deepEqual(resolveGroups(['common', 'backend'], { available, repo: 'x' }).groups, ['common', 'backend']);
   assert.throws(() => resolveGroups(null, { available, repo: 'x', requested: ['nope'] }), /no such group: nope/);
   assert.deepEqual(resolveGroups(['common', 'gone'], { available, repo: 'x' }).dropped, ['gone']);
+  assert.deepEqual(resolveGroups(['common', 'web', 'backend'], { available, repo: 'web' }).groups, ['common', 'backend', 'web']);
+  assert.deepEqual(resolveGroups(['common', 'gone'], { available, repo: 'gone' }).dropped, ['gone']);
 });
 
 test('isDowngrade compares semver tags and ignores anything else', () => {
@@ -124,13 +126,14 @@ test('updateRulesyncConfig sets targets and features, adds inputRoots and keeps 
 
 test('summarize groups the vendored changes by kind', () => {
   const nameStatus = [
+    'M\t.agentspread/instructions.md',
     'A\t.agentspread/skills/new-one/SKILL.md',
     'M\t.agentspread/skills/api/SKILL.md',
     'A\t.agentspread/skills/api/extra.md',
     'D\t.agentspread/subagents/old.md',
     'M\t.agentspread/hooks.json',
   ].join('\n');
-  assert.equal(summarize(nameStatus), 'skills: api, new-one (new); subagents: old (removed); hooks: hooks.json');
+  assert.equal(summarize(nameStatus), 'instructions: AGENTS.md section; skills: api, new-one (new); subagents: old (removed); hooks: hooks.json');
   assert.equal(summarize(''), 'none');
 });
 
@@ -183,3 +186,95 @@ test('apply --set-groups replaces the groups and --targets the agents', () => {
   assert.deepEqual(jsonc(readFileSync(join(repo, 'rulesync.jsonc'), 'utf8')).targets, ['claudecode']);
 });
 
+
+test('writeManagedBlock adds, replaces and removes only its own section', () => {
+  const block = (body) => `<!-- agentspread:start (managed by agentspread; edits inside are overwritten on the next sync) -->\n${body}\n<!-- agentspread:end -->`;
+  assert.equal(writeManagedBlock('', 'shared'), `${block('shared')}\n`);
+  const own = '# Repo\n\nOur own rules.\n';
+  const added = writeManagedBlock(own, 'shared');
+  assert.equal(added, `# Repo\n\nOur own rules.\n\n${block('shared')}\n`);
+  const edited = added.replace('Our own rules.', 'Our own rules, edited.') + '\nMore of ours.\n';
+  assert.equal(writeManagedBlock(edited, 'new'), `# Repo\n\nOur own rules, edited.\n\n${block('new')}\n\nMore of ours.\n`);
+  assert.equal(writeManagedBlock(added, null), own);
+  assert.equal(writeManagedBlock(`${block('shared')}\n`, null), '');
+  assert.equal(writeManagedBlock(own, null), own);
+  assert.throws(() => writeManagedBlock(`${own}<!-- agentspread:start -->\nleft open\n`, 'x'), /broken agentspread markers/);
+  assert.throws(() => writeManagedBlock(`${block('a')}\n${block('b')}\n`, 'x'), /broken agentspread markers/);
+  const mention = 'Do not edit the `<!-- agentspread:start -->` section.\n';
+  assert.equal(writeManagedBlock(mention, 'x'), `${mention}\n${block('x')}\n`);
+});
+
+const instructionsFixture = () =>
+  write(tmp(), {
+    'groups/common/skills/shared/SKILL.md': skill('shared'),
+    'groups/common/AGENTS.md': 'Common rule.\n',
+    'groups/web/AGENTS.md': 'Web rule.\n',
+  });
+
+test('apply writes the groups\' AGENTS.md into a section of the repo\'s AGENTS.md, keeping the rest', () => {
+  const repo = consumer();
+  writeFileSync(join(repo, 'AGENTS.md'), '# Ours\n');
+  writeFileSync(join(repo, 'CLAUDE.md'), '# Claude notes\n');
+  const src = instructionsFixture();
+  assert.equal(apply(repo, 'v1.0.0', CONTENT, 'web', '--from', src).status, 0);
+  assert.match(
+    readFileSync(join(repo, 'AGENTS.md'), 'utf8'),
+    /^# Ours\n\n<!-- agentspread:start[^\n]*-->\nCommon rule\.\n\nWeb rule\.\n<!-- agentspread:end -->\n$/,
+  );
+  assert.equal(
+    readFileSync(join(repo, 'CLAUDE.md'), 'utf8'),
+    readFileSync(join(repo, 'AGENTS.md'), 'utf8').replace('# Ours', '# Claude notes'),
+    'Claude Code reads only CLAUDE.md when a repo has one',
+  );
+
+  rmSync(join(src, 'groups/common/AGENTS.md'));
+  rmSync(join(src, 'groups/web/AGENTS.md'));
+  assert.equal(apply(repo, 'v1.0.0', CONTENT, 'web', '--from', src).status, 0);
+  assert.equal(readFileSync(join(repo, 'AGENTS.md'), 'utf8'), '# Ours\n');
+  assert.equal(readFileSync(join(repo, 'CLAUDE.md'), 'utf8'), '# Claude notes\n');
+});
+
+test('apply never creates CLAUDE.md, and skips one that links to or imports AGENTS.md', () => {
+  const src = instructionsFixture();
+  const none = consumer();
+  assert.equal(apply(none, 'v1.0.0', CONTENT, 'x', '--from', src).status, 0);
+  assert.equal(existsSync(join(none, 'CLAUDE.md')), false);
+
+  const imports = consumer();
+  writeFileSync(join(imports, 'CLAUDE.md'), '@AGENTS.md\n');
+  assert.equal(apply(imports, 'v1.0.0', CONTENT, 'x', '--from', src).status, 0);
+  assert.equal(readFileSync(join(imports, 'CLAUDE.md'), 'utf8'), '@AGENTS.md\n');
+
+  const linked = consumer();
+  writeFileSync(join(linked, 'AGENTS.md'), '# Shared file\n');
+  symlinkSync('AGENTS.md', join(linked, 'CLAUDE.md'));
+  assert.equal(apply(linked, 'v1.0.0', CONTENT, 'x', '--from', src).status, 0);
+  assert.equal(readFileSync(join(linked, 'AGENTS.md'), 'utf8').match(/agentspread:start/g).length, 1);
+});
+
+test('apply creates AGENTS.md for shared instructions and removes it once they are gone', () => {
+  const repo = consumer();
+  const src = instructionsFixture();
+  assert.equal(apply(repo, 'v1.0.0', CONTENT, 'x', '--from', src).status, 0);
+  assert.match(readFileSync(join(repo, 'AGENTS.md'), 'utf8'), /^<!-- agentspread:start[^\n]*-->\nCommon rule\.\n<!-- agentspread:end -->\n$/);
+  rmSync(join(src, 'groups/common/AGENTS.md'));
+  assert.equal(apply(repo, 'v1.0.0', CONTENT, 'x', '--from', src).status, 0);
+  assert.equal(existsSync(join(repo, 'AGENTS.md')), false);
+});
+
+test('apply refuses a group AGENTS.md that contains the section markers', () => {
+  const src = instructionsFixture();
+  writeFileSync(join(src, 'groups/web/AGENTS.md'), '<!-- agentspread:end -->\n');
+  const run = apply(consumer(), 'v1.0.0', CONTENT, 'web', '--from', src);
+  assert.match(run.stderr, /groups\/web\/AGENTS\.md must not contain/);
+});
+
+test('apply refuses shared instructions when rulesync rules would overwrite them', () => {
+  const repo = consumer();
+  for (const feature of ['rules', '*']) {
+    writeFileSync(join(repo, 'rulesync.jsonc'), `{\n  "targets": ["claudecode"],\n  "features": ["skills", "${feature}"]\n}\n`);
+    const run = apply(repo, 'v1.0.0', CONTENT, 'web', '--from', instructionsFixture());
+    assert.notEqual(run.status, 0);
+    assert.match(run.stderr, /enables "rules"/);
+  }
+});
