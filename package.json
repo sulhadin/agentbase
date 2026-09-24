@@ -10,6 +10,7 @@
     "rulesync",
     "github-actions"
   ],
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sulhadin/agentspread.git"
