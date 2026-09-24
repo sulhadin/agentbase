@@ -4,7 +4,7 @@ This repo holds the AI agent instructions, skills, subagents, commands and hooks
 
 ## Change something
 
-Content lives in `groups/<group>/`: `skills/<name>/SKILL.md`, `subagents/<name>.md`, `commands/<name>.md`, `hooks.json`, `scripts/` and `AGENTS.md` (instructions added to each repo's own AGENTS.md and CLAUDE.md). `common` reaches every consumer; a group named after a repo reaches only that repo; other groups are picked per repo.
+Content lives in `groups/<group>/`: `skills/<name>/SKILL.md`, `subagents/<name>.md`, `commands/<name>.md`, `hooks.json`, `scripts/` and `AGENTS.md` (instructions added to each repo's own AGENTS.md, and to its CLAUDE.md if it has one). `common` reaches every consumer; a group named after a repo reaches only that repo; other groups are picked per repo.
 
 Open a PR with a conventional title (`feat(groups): add api-design`, `fix: ...`) and squash-merge it. `docs:`, `chore:` and friends don't release.
 

@@ -41,7 +41,9 @@ export function resolveGroups(current, { available, repo, requested = [] }) {
   const unknown = requested.filter((g) => !available.includes(g));
   if (unknown.length) throw new Error(`no such group: ${unknown.join(', ')} (available: ${available.join(', ')})`);
   // The repo's own group goes last, so its instructions follow and can refine the shared ones.
-  const wanted = unique(['common', ...[...(current ?? []), ...requested].filter((g) => g !== repo), ...(available.includes(repo) ? [repo] : [])]);
+  const chosen = [...(current ?? []), ...requested];
+  const own = chosen.includes(repo) || available.includes(repo) ? [repo] : [];
+  const wanted = unique(['common', ...chosen.filter((g) => g !== repo), ...own]);
   return {
     groups: wanted.filter((g) => available.includes(g)),
     dropped: wanted.filter((g) => !available.includes(g)),
@@ -112,14 +114,14 @@ export function vendorGroups(agentspreadDir, groups, vendorDir) {
   }
 }
 
-// Claude Code reads only CLAUDE.md; Codex, Cursor, Copilot and the rest read AGENTS.md.
-export const instructionFiles = (targets) => [
-  ...(targets.includes('claudecode') ? ['CLAUDE.md'] : []),
-  ...(targets.some((t) => t !== 'claudecode') ? ['AGENTS.md'] : []),
-];
-
 // Replaces, adds or (with no content) removes agentspread's section, leaving the rest of the file as it was.
-export function writeManagedBlock(text, content) {
+export function writeManagedBlock(text, content, file = 'the file') {
+  const starts = text.match(/<!-- agentspread:start/g)?.length ?? 0;
+  const ends = text.match(/<!-- agentspread:end -->/g)?.length ?? 0;
+  // A stray marker would make the next match run across the repo's own text and overwrite it.
+  if (starts > 1 || ends > 1 || starts !== ends || (starts && !BLOCK.test(text))) {
+    throw new Error(`${file} has broken agentspread markers; keep exactly one agentspread:start line followed by one agentspread:end line, or remove both`);
+  }
   const match = text.match(BLOCK);
   if (!match && !content) return text;
   const before = match ? text.slice(0, match.index).trimEnd() : text.trimEnd();
@@ -129,17 +131,24 @@ export function writeManagedBlock(text, content) {
   return joined ? `${joined}\n` : '';
 }
 
-export function syncInstructions(targets) {
+// Claude Code reads AGENTS.md only when a repo has no CLAUDE.md, so a repo's own CLAUDE.md gets the
+// section too. It is never created, and skipped when it is a symlink to AGENTS.md or imports it
+// (@AGENTS.md), since the section would then load twice.
+export function syncInstructions() {
   const source = join(VENDOR_DIR, INSTRUCTIONS_FILE);
   const content = existsSync(source) ? readFileSync(source, 'utf8') : null;
-  const wanted = instructionFiles(targets);
-  for (const file of ['CLAUDE.md', 'AGENTS.md']) {
-    const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
-    const next = writeManagedBlock(text, wanted.includes(file) ? content : null);
-    if (next === text) continue;
-    if (next) writeFileSync(file, next);
-    else rmSync(file);
+  const agents = existsSync('AGENTS.md') ? readFileSync('AGENTS.md', 'utf8') : '';
+  const nextAgents = writeManagedBlock(agents, content, 'AGENTS.md');
+  if (nextAgents !== agents) {
+    if (nextAgents) writeFileSync('AGENTS.md', nextAgents);
+    else rmSync('AGENTS.md');
   }
+  if (!existsSync('CLAUDE.md')) return;
+  if (existsSync('AGENTS.md') && realpathSync('CLAUDE.md') === realpathSync('AGENTS.md')) return;
+  const claude = readFileSync('CLAUDE.md', 'utf8');
+  const imports = /^\s*@(\.\/)?AGENTS\.md\s*$/m.test(claude);
+  const nextClaude = writeManagedBlock(claude, imports ? null : content, 'CLAUDE.md');
+  if (nextClaude !== claude) writeFileSync('CLAUDE.md', nextClaude);
 }
 
 const hasPart = (root, part) =>
@@ -187,7 +196,7 @@ export function summarize(nameStatus) {
     const [status, path] = line.split('\t');
     const [, kind, name] = path.split('/');
     if (kind === 'hooks.json') buckets.hooks.set('hooks.json', status[0]);
-    else if (kind === INSTRUCTIONS_FILE) buckets.instructions.set('AGENTS.md / CLAUDE.md section', status[0]);
+    else if (kind === INSTRUCTIONS_FILE) buckets.instructions.set('AGENTS.md section', status[0]);
     else if (buckets[kind] && name) {
       const key = kind === 'skills' || kind === 'scripts' ? name : name.replace(/\.[^.]+$/, '');
       // A skill folder with one file added and another deleted is still just "changed".
@@ -254,13 +263,13 @@ function apply(ref, source, repo, { groups: requested = [], setGroups, targets, 
   }
 
   const existing = JSON.parse(config.replace(/^\s*\/\/.*$/gm, '').match(/"features":\s*(\[[^\]]*\])/)?.[1] ?? '[]');
-  // rulesync's rules feature writes AGENTS.md and CLAUDE.md whole, which would drop agentspread's section.
-  if (existing.includes('rules') && existsSync(join(VENDOR_DIR, INSTRUCTIONS_FILE))) {
-    throw new Error('rulesync.jsonc enables "rules", which rewrites AGENTS.md/CLAUDE.md and would drop the shared instructions; move the repo\'s rules into AGENTS.md/CLAUDE.md and remove "rules" from features');
+  // rulesync's rules feature writes AGENTS.md whole, which would drop agentspread's section.
+  if (existing.some((f) => f === 'rules' || f === '*') && existsSync(join(VENDOR_DIR, INSTRUCTIONS_FILE))) {
+    throw new Error('rulesync.jsonc enables "rules", which rewrites AGENTS.md and would drop the shared instructions; move the repo\'s rules into AGENTS.md and list features without "rules" or "*"');
   }
   const updated = updateRulesyncConfig(config, { features: featuresFor(existing, INPUT_ROOTS), targets });
   writeFileSync('rulesync.jsonc', updated);
-  syncInstructions(JSON.parse(updated.match(/"targets":\s*(\[[^\]]*\])/)?.[1] ?? '[]'));
+  syncInstructions();
   writeFileSync(MEMBERSHIP_FILE, `${JSON.stringify({ source, ref, groups }, null, 2)}\n`);
 
   console.log(`groups: ${groups.join(', ')}`);

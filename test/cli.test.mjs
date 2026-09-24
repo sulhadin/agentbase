@@ -22,3 +22,9 @@ test('onboard and reconfigure with arguments run without prompts', () => {
   assert.match(cli('onboard', '--help').stdout, /npx agentspread onboard <repo>/);
   assert.match(cli('reconfigure', '--help').stdout, /npx agentspread reconfigure <repo>/);
 });
+
+test('an unknown command prints the usage instead of crashing', () => {
+  const run = cli('toString');
+  assert.equal(run.status, 1);
+  assert.match(run.stdout, /Usage: npx agentspread <command>/);
+});

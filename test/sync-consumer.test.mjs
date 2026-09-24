@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
@@ -60,6 +60,7 @@ test('resolveGroups always includes common and the group named after the repo', 
   assert.throws(() => resolveGroups(null, { available, repo: 'x', requested: ['nope'] }), /no such group: nope/);
   assert.deepEqual(resolveGroups(['common', 'gone'], { available, repo: 'x' }).dropped, ['gone']);
   assert.deepEqual(resolveGroups(['common', 'web', 'backend'], { available, repo: 'web' }).groups, ['common', 'backend', 'web']);
+  assert.deepEqual(resolveGroups(['common', 'gone'], { available, repo: 'gone' }).dropped, ['gone']);
 });
 
 test('isDowngrade compares semver tags and ignores anything else', () => {
@@ -196,6 +197,8 @@ test('writeManagedBlock adds, replaces and removes only its own section', () => 
   assert.equal(writeManagedBlock(added, null), own);
   assert.equal(writeManagedBlock(`${block('shared')}\n`, null), '');
   assert.equal(writeManagedBlock(own, null), own);
+  assert.throws(() => writeManagedBlock(`${own}<!-- agentspread:start -->\nleft open\n`, 'x'), /broken agentspread markers/);
+  assert.throws(() => writeManagedBlock(`${block('a')}\n${block('b')}\n`, 'x'), /broken agentspread markers/);
 });
 
 const instructionsFixture = () =>
@@ -205,25 +208,63 @@ const instructionsFixture = () =>
     'groups/web/AGENTS.md': 'Web rule.\n',
   });
 
-test('apply writes the groups\' AGENTS.md into CLAUDE.md and AGENTS.md, keeping what the repo wrote', () => {
+test('apply writes the groups\' AGENTS.md into a section of the repo\'s AGENTS.md, keeping the rest', () => {
   const repo = consumer();
-  writeFileSync(join(repo, 'rulesync.jsonc'), '{\n  "targets": ["claudecode", "codexcli"],\n  "features": ["skills"]\n}\n');
-  writeFileSync(join(repo, 'CLAUDE.md'), '# Ours\n');
+  writeFileSync(join(repo, 'AGENTS.md'), '# Ours\n');
+  writeFileSync(join(repo, 'CLAUDE.md'), '# Claude notes\n');
   const src = instructionsFixture();
   assert.equal(apply(repo, 'v1.0.0', CONTENT, 'web', '--from', src).status, 0);
-  const claude = readFileSync(join(repo, 'CLAUDE.md'), 'utf8');
-  assert.match(claude, /^# Ours\n\n<!-- agentspread:start[^\n]*-->\nCommon rule\.\n\nWeb rule\.\n<!-- agentspread:end -->\n$/);
-  assert.equal(readFileSync(join(repo, 'AGENTS.md'), 'utf8'), claude.replace('# Ours\n\n', ''));
+  assert.match(
+    readFileSync(join(repo, 'AGENTS.md'), 'utf8'),
+    /^# Ours\n\n<!-- agentspread:start[^\n]*-->\nCommon rule\.\n\nWeb rule\.\n<!-- agentspread:end -->\n$/,
+  );
+  assert.equal(
+    readFileSync(join(repo, 'CLAUDE.md'), 'utf8'),
+    readFileSync(join(repo, 'AGENTS.md'), 'utf8').replace('# Ours', '# Claude notes'),
+    'Claude Code reads only CLAUDE.md when a repo has one',
+  );
 
-  assert.equal(apply(repo, 'v1.0.0', CONTENT, 'web', '--targets', 'claudecode', '--from', src).status, 0);
-  assert.equal(existsSync(join(repo, 'AGENTS.md')), false, 'held only our section');
-  assert.match(readFileSync(join(repo, 'CLAUDE.md'), 'utf8'), /Web rule/);
+  rmSync(join(src, 'groups/common/AGENTS.md'));
+  rmSync(join(src, 'groups/web/AGENTS.md'));
+  assert.equal(apply(repo, 'v1.0.0', CONTENT, 'web', '--from', src).status, 0);
+  assert.equal(readFileSync(join(repo, 'AGENTS.md'), 'utf8'), '# Ours\n');
+  assert.equal(readFileSync(join(repo, 'CLAUDE.md'), 'utf8'), '# Claude notes\n');
+});
+
+test('apply never creates CLAUDE.md, and skips one that links to or imports AGENTS.md', () => {
+  const src = instructionsFixture();
+  const none = consumer();
+  assert.equal(apply(none, 'v1.0.0', CONTENT, 'x', '--from', src).status, 0);
+  assert.equal(existsSync(join(none, 'CLAUDE.md')), false);
+
+  const imports = consumer();
+  writeFileSync(join(imports, 'CLAUDE.md'), '@AGENTS.md\n');
+  assert.equal(apply(imports, 'v1.0.0', CONTENT, 'x', '--from', src).status, 0);
+  assert.equal(readFileSync(join(imports, 'CLAUDE.md'), 'utf8'), '@AGENTS.md\n');
+
+  const linked = consumer();
+  writeFileSync(join(linked, 'AGENTS.md'), '# Shared file\n');
+  symlinkSync('AGENTS.md', join(linked, 'CLAUDE.md'));
+  assert.equal(apply(linked, 'v1.0.0', CONTENT, 'x', '--from', src).status, 0);
+  assert.equal(readFileSync(join(linked, 'AGENTS.md'), 'utf8').match(/agentspread:start/g).length, 1);
+});
+
+test('apply creates AGENTS.md for shared instructions and removes it once they are gone', () => {
+  const repo = consumer();
+  const src = instructionsFixture();
+  assert.equal(apply(repo, 'v1.0.0', CONTENT, 'x', '--from', src).status, 0);
+  assert.match(readFileSync(join(repo, 'AGENTS.md'), 'utf8'), /^<!-- agentspread:start[^\n]*-->\nCommon rule\.\n<!-- agentspread:end -->\n$/);
+  rmSync(join(src, 'groups/common/AGENTS.md'));
+  assert.equal(apply(repo, 'v1.0.0', CONTENT, 'x', '--from', src).status, 0);
+  assert.equal(existsSync(join(repo, 'AGENTS.md')), false);
 });
 
 test('apply refuses shared instructions when rulesync rules would overwrite them', () => {
   const repo = consumer();
-  writeFileSync(join(repo, 'rulesync.jsonc'), '{\n  "targets": ["claudecode"],\n  "features": ["skills", "rules"]\n}\n');
-  const run = apply(repo, 'v1.0.0', CONTENT, 'web', '--from', instructionsFixture());
-  assert.notEqual(run.status, 0);
-  assert.match(run.stderr, /enables "rules"/);
+  for (const feature of ['rules', '*']) {
+    writeFileSync(join(repo, 'rulesync.jsonc'), `{\n  "targets": ["claudecode"],\n  "features": ["skills", "${feature}"]\n}\n`);
+    const run = apply(repo, 'v1.0.0', CONTENT, 'web', '--from', instructionsFixture());
+    assert.notEqual(run.status, 0);
+    assert.match(run.stderr, /enables "rules"/);
+  }
 });

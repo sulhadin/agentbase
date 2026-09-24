@@ -23,8 +23,8 @@ Teams copy the same agent config into every repo, and the copies drift. agentspr
  groups/web/     ─┘                            .claude/           skills, agents, commands, hooks for Claude Code
                                                .agents/skills/    skills for Codex, Cursor, Antigravity, Copilot, OpenCode
                                                .codex/            agents, hooks for Codex
-                                               AGENTS.md          a shared section for every agent; the rest stays the repo's
-                                               CLAUDE.md          the same section for Claude Code
+                                               AGENTS.md          a shared section of instructions; the rest stays the repo's
+                                               CLAUDE.md          the same section, only if the repo has one
 ```
 
 agentspread is the engine: an npm package (`npx agentspread …`) plus reusable GitHub workflows. Your **content repo** holds only your groups and three small workflow files that call agentspread at a pinned version, and Dependabot opens a PR when a new agentspread version is out. Sync copies each release into the consumer's committed `.agentspread/`, and [rulesync](https://github.com/dyoshikawa/rulesync) generates each tool's files from it. Everything is committed, so every clone and cloud agent session sees it without a build step or a token.

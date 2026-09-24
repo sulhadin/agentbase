@@ -22,7 +22,7 @@ const ALIASES = { setup: ['node', INTERACTIVE] };
 const [command, ...args] = process.argv.slice(2);
 if (command === '--version' || command === '-v') {
   console.log(version);
-} else if (!COMMANDS[command] && !ALIASES[command]) {
+} else if (!Object.hasOwn(COMMANDS, command ?? '') && !Object.hasOwn(ALIASES, command ?? '')) {
   console.log(`agentspread ${version}\n\nUsage: npx agentspread <command>\n`);
   for (const [name, [, , about]] of Object.entries(COMMANDS)) console.log(`  ${name.padEnd(12)} ${about}`);
   process.exit(command && command !== '--help' && command !== '-h' ? 1 : 0);

@@ -24,29 +24,30 @@ jobs:
             echo "::error::Generated agent files are out of date or were hand-edited. Run: npx rulesync@16 generate --delete"
             exit 1
           }
-      - name: Check agentspread's section in CLAUDE.md and AGENTS.md
+      - name: Check agentspread's section in AGENTS.md and CLAUDE.md
         # Only the section between the agentspread markers is checked; the rest of each file is the repo's.
+        # CLAUDE.md carries it only if the repo has its own CLAUDE.md that neither links to nor imports AGENTS.md.
         run: |
           node -e '
             const fs = require("fs");
             const read = (f) => (fs.existsSync(f) ? fs.readFileSync(f, "utf8") : null);
+            const sectionOf = (f) => read(f)?.match(/<!-- agentspread:start[^>]*-->\r?\n([\s\S]*?)\r?\n<!-- agentspread:end -->/)?.[1].trim() ?? null;
             const shared = read(".agentspread/instructions.md")?.trim() ?? null;
-            const targets = JSON.parse(read("rulesync.jsonc").match(/"targets":\s*(\[[^\]]*\])/)?.[1] ?? "[]");
-            const wanted = { "CLAUDE.md": targets.includes("claudecode"), "AGENTS.md": targets.some((t) => t !== "claudecode") };
+            const same = fs.existsSync("CLAUDE.md") && fs.existsSync("AGENTS.md") && fs.realpathSync("CLAUDE.md") === fs.realpathSync("AGENTS.md");
+            const claudeWants = fs.existsSync("CLAUDE.md") && !same && !/^\s*@(\.\/)?AGENTS\.md\s*$/m.test(read("CLAUDE.md"));
+            const expected = { "AGENTS.md": shared, ...(same ? {} : { "CLAUDE.md": claudeWants ? shared : null }) };
             let failed = false;
-            for (const [file, want] of Object.entries(wanted)) {
-              const section = read(file)?.match(/<!-- agentspread:start[^>]*-->\n([\s\S]*?)\n<!-- agentspread:end -->/)?.[1].trim() ?? null;
-              const expected = want ? shared : null;
-              if (section !== expected) {
-                console.log(`::error::${file}: the agentspread section is ${section === null ? "missing" : "out of date or hand-edited"}. It is rewritten by the next sync; to change it, edit the content repo.`);
-                failed = true;
-              }
+            for (const [file, want] of Object.entries(expected)) {
+              const section = sectionOf(file);
+              if (section === want) continue;
+              console.log(`::error::${file}: the agentspread section is ${section === null ? "missing" : want === null ? "not expected here" : "out of date or hand-edited"}. The next sync rewrites it; to change it, edit the content repo.`);
+              failed = true;
             }
             process.exit(failed ? 1 : 0);
           '
       - name: Fail if .gitignore hides generated files
         run: |
-          ignored=$(git ls-files --others --ignored --exclude-standard -- .agentspread AGENTS.md CLAUDE.md .claude .agents .codex .github \
+          ignored=$(git ls-files --others --ignored --exclude-standard -- .agentspread AGENTS.md .claude .agents .codex .github \
             .cursor .opencode .cline .roo .kiro .junie .warp .qwen .augment | grep -v '\.local\.' || true)
           [ -z "$ignored" ] || {
             echo "::error::.gitignore hides generated files, so they are never committed: $(echo "$ignored" | paste -sd' ' -)"

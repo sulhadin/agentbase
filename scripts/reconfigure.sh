@@ -49,7 +49,7 @@ node "${ROOT}scripts/sync-consumer.mjs" apply "$ref" "$source" "${REPO#*/}" "${A
 npx --yes rulesync@16 generate --delete
 after=$(describe)
 
-ignored=$(git ls-files --others --ignored --exclude-standard -- .agentspread AGENTS.md CLAUDE.md .claude .agents .codex .github \
+ignored=$(git ls-files --others --ignored --exclude-standard -- .agentspread AGENTS.md .claude .agents .codex .github \
   .cursor .opencode .cline .roo .kiro .junie .warp .qwen .augment | grep -v '\.local\.' || true)
 [ -z "$ignored" ] || { echo "✗ .gitignore hides generated files:" >&2; echo "$ignored" | sed 's/^/    /' >&2; exit 1; }
 
