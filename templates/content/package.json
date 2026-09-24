@@ -1,7 +1,7 @@
 {
   "name": "__NAME__",
   "private": true,
-  "description": "Shared AI agent skills, subagents, commands and hooks, rolled out by agentspread.",
+  "description": "Shared AI agent instructions, skills, subagents, commands and hooks, rolled out by agentspread.",
   "scripts": {
     "onboard": "agentspread onboard",
     "reconfigure": "agentspread reconfigure",

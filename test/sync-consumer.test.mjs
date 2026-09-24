@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
   featuresFor, isDowngrade, mergeHooks, readMembership, resolveGroups, summarize,
-  updateRulesyncConfig, vendorGroups,
+  updateRulesyncConfig, vendorGroups, writeManagedBlock,
 } from '../scripts/sync-consumer.mjs';
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), '..', 'scripts', 'sync-consumer.mjs');
@@ -59,6 +59,7 @@ test('resolveGroups always includes common and the group named after the repo', 
   assert.deepEqual(resolveGroups(['common', 'backend'], { available, repo: 'x' }).groups, ['common', 'backend']);
   assert.throws(() => resolveGroups(null, { available, repo: 'x', requested: ['nope'] }), /no such group: nope/);
   assert.deepEqual(resolveGroups(['common', 'gone'], { available, repo: 'x' }).dropped, ['gone']);
+  assert.deepEqual(resolveGroups(['common', 'web', 'backend'], { available, repo: 'web' }).groups, ['common', 'backend', 'web']);
 });
 
 test('isDowngrade compares semver tags and ignores anything else', () => {
@@ -183,3 +184,46 @@ test('apply --set-groups replaces the groups and --targets the agents', () => {
   assert.deepEqual(jsonc(readFileSync(join(repo, 'rulesync.jsonc'), 'utf8')).targets, ['claudecode']);
 });
 
+
+test('writeManagedBlock adds, replaces and removes only its own section', () => {
+  const block = (body) => `<!-- agentspread:start (managed by agentspread; edits inside are overwritten on the next sync) -->\n${body}\n<!-- agentspread:end -->`;
+  assert.equal(writeManagedBlock('', 'shared'), `${block('shared')}\n`);
+  const own = '# Repo\n\nOur own rules.\n';
+  const added = writeManagedBlock(own, 'shared');
+  assert.equal(added, `# Repo\n\nOur own rules.\n\n${block('shared')}\n`);
+  const edited = added.replace('Our own rules.', 'Our own rules, edited.') + '\nMore of ours.\n';
+  assert.equal(writeManagedBlock(edited, 'new'), `# Repo\n\nOur own rules, edited.\n\n${block('new')}\n\nMore of ours.\n`);
+  assert.equal(writeManagedBlock(added, null), own);
+  assert.equal(writeManagedBlock(`${block('shared')}\n`, null), '');
+  assert.equal(writeManagedBlock(own, null), own);
+});
+
+const instructionsFixture = () =>
+  write(tmp(), {
+    'groups/common/skills/shared/SKILL.md': skill('shared'),
+    'groups/common/AGENTS.md': 'Common rule.\n',
+    'groups/web/AGENTS.md': 'Web rule.\n',
+  });
+
+test('apply writes the groups\' AGENTS.md into CLAUDE.md and AGENTS.md, keeping what the repo wrote', () => {
+  const repo = consumer();
+  writeFileSync(join(repo, 'rulesync.jsonc'), '{\n  "targets": ["claudecode", "codexcli"],\n  "features": ["skills"]\n}\n');
+  writeFileSync(join(repo, 'CLAUDE.md'), '# Ours\n');
+  const src = instructionsFixture();
+  assert.equal(apply(repo, 'v1.0.0', CONTENT, 'web', '--from', src).status, 0);
+  const claude = readFileSync(join(repo, 'CLAUDE.md'), 'utf8');
+  assert.match(claude, /^# Ours\n\n<!-- agentspread:start[^\n]*-->\nCommon rule\.\n\nWeb rule\.\n<!-- agentspread:end -->\n$/);
+  assert.equal(readFileSync(join(repo, 'AGENTS.md'), 'utf8'), claude.replace('# Ours\n\n', ''));
+
+  assert.equal(apply(repo, 'v1.0.0', CONTENT, 'web', '--targets', 'claudecode', '--from', src).status, 0);
+  assert.equal(existsSync(join(repo, 'AGENTS.md')), false, 'held only our section');
+  assert.match(readFileSync(join(repo, 'CLAUDE.md'), 'utf8'), /Web rule/);
+});
+
+test('apply refuses shared instructions when rulesync rules would overwrite them', () => {
+  const repo = consumer();
+  writeFileSync(join(repo, 'rulesync.jsonc'), '{\n  "targets": ["claudecode"],\n  "features": ["skills", "rules"]\n}\n');
+  const run = apply(repo, 'v1.0.0', CONTENT, 'web', '--from', instructionsFixture());
+  assert.notEqual(run.status, 0);
+  assert.match(run.stderr, /enables "rules"/);
+});

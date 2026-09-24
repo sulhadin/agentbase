@@ -16,6 +16,11 @@ import { fileURLToPath } from 'node:url';
 export const MEMBERSHIP_FILE = 'agentspread.json';
 export const VENDOR_DIR = '.agentspread';
 export const INPUT_ROOTS = [VENDOR_DIR, '.rulesync'];
+// Not AGENTS.md: .agentspread/ is a rulesync input root, and the consumer's own AGENTS.md is where it ends up.
+export const INSTRUCTIONS_FILE = 'instructions.md';
+const BLOCK_START = '<!-- agentspread:start (managed by agentspread; edits inside are overwritten on the next sync) -->';
+const BLOCK_END = '<!-- agentspread:end -->';
+const BLOCK = /<!-- agentspread:start[^>]*-->[\s\S]*?<!-- agentspread:end -->/;
 const PARTS = ['skills', 'subagents', 'commands', 'hooks'];
 const unique = (xs) => [...new Set(xs)];
 const listDir = (dir) => (existsSync(dir) ? readdirSync(dir, { withFileTypes: true }) : []);
@@ -35,7 +40,8 @@ export function readMembership(text) {
 export function resolveGroups(current, { available, repo, requested = [] }) {
   const unknown = requested.filter((g) => !available.includes(g));
   if (unknown.length) throw new Error(`no such group: ${unknown.join(', ')} (available: ${available.join(', ')})`);
-  const wanted = unique(['common', ...(current ?? []), ...requested, ...(available.includes(repo) ? [repo] : [])]);
+  // The repo's own group goes last, so its instructions follow and can refine the shared ones.
+  const wanted = unique(['common', ...[...(current ?? []), ...requested].filter((g) => g !== repo), ...(available.includes(repo) ? [repo] : [])]);
   return {
     groups: wanted.filter((g) => available.includes(g)),
     dropped: wanted.filter((g) => !available.includes(g)),
@@ -95,6 +101,45 @@ export function vendorGroups(agentspreadDir, groups, vendorDir) {
     mkdirSync(vendorDir, { recursive: true });
     writeFileSync(join(vendorDir, 'hooks.json'), `${JSON.stringify(mergeHooks(hookFiles), null, 2)}\n`);
   }
+  const instructions = groups
+    .map((group) => join(agentspreadDir, 'groups', group, 'AGENTS.md'))
+    .filter((file) => existsSync(file))
+    .map((file) => readFileSync(file, 'utf8').trim())
+    .filter(Boolean);
+  if (instructions.length) {
+    mkdirSync(vendorDir, { recursive: true });
+    writeFileSync(join(vendorDir, INSTRUCTIONS_FILE), `${instructions.join('\n\n')}\n`);
+  }
+}
+
+// Claude Code reads only CLAUDE.md; Codex, Cursor, Copilot and the rest read AGENTS.md.
+export const instructionFiles = (targets) => [
+  ...(targets.includes('claudecode') ? ['CLAUDE.md'] : []),
+  ...(targets.some((t) => t !== 'claudecode') ? ['AGENTS.md'] : []),
+];
+
+// Replaces, adds or (with no content) removes agentspread's section, leaving the rest of the file as it was.
+export function writeManagedBlock(text, content) {
+  const match = text.match(BLOCK);
+  if (!match && !content) return text;
+  const before = match ? text.slice(0, match.index).trimEnd() : text.trimEnd();
+  const after = match ? text.slice(match.index + match[0].length).trimStart() : '';
+  const block = content ? `${BLOCK_START}\n${content.trim()}\n${BLOCK_END}` : '';
+  const joined = [before, block, after.trimEnd()].filter(Boolean).join('\n\n');
+  return joined ? `${joined}\n` : '';
+}
+
+export function syncInstructions(targets) {
+  const source = join(VENDOR_DIR, INSTRUCTIONS_FILE);
+  const content = existsSync(source) ? readFileSync(source, 'utf8') : null;
+  const wanted = instructionFiles(targets);
+  for (const file of ['CLAUDE.md', 'AGENTS.md']) {
+    const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
+    const next = writeManagedBlock(text, wanted.includes(file) ? content : null);
+    if (next === text) continue;
+    if (next) writeFileSync(file, next);
+    else rmSync(file);
+  }
 }
 
 const hasPart = (root, part) =>
@@ -134,12 +179,15 @@ export function updateRulesyncConfig(text, { features, targets }) {
 }
 
 export function summarize(nameStatus) {
-  const buckets = { skills: new Map(), subagents: new Map(), commands: new Map(), scripts: new Map(), hooks: new Map() };
+  const buckets = {
+    instructions: new Map(), skills: new Map(), subagents: new Map(), commands: new Map(), scripts: new Map(), hooks: new Map(),
+  };
   const label = { A: 'new', D: 'removed' };
   for (const line of nameStatus.split('\n').filter(Boolean)) {
     const [status, path] = line.split('\t');
     const [, kind, name] = path.split('/');
     if (kind === 'hooks.json') buckets.hooks.set('hooks.json', status[0]);
+    else if (kind === INSTRUCTIONS_FILE) buckets.instructions.set('AGENTS.md / CLAUDE.md section', status[0]);
     else if (buckets[kind] && name) {
       const key = kind === 'skills' || kind === 'scripts' ? name : name.replace(/\.[^.]+$/, '');
       // A skill folder with one file added and another deleted is still just "changed".
@@ -206,7 +254,13 @@ function apply(ref, source, repo, { groups: requested = [], setGroups, targets, 
   }
 
   const existing = JSON.parse(config.replace(/^\s*\/\/.*$/gm, '').match(/"features":\s*(\[[^\]]*\])/)?.[1] ?? '[]');
-  writeFileSync('rulesync.jsonc', updateRulesyncConfig(config, { features: featuresFor(existing, INPUT_ROOTS), targets }));
+  // rulesync's rules feature writes AGENTS.md and CLAUDE.md whole, which would drop agentspread's section.
+  if (existing.includes('rules') && existsSync(join(VENDOR_DIR, INSTRUCTIONS_FILE))) {
+    throw new Error('rulesync.jsonc enables "rules", which rewrites AGENTS.md/CLAUDE.md and would drop the shared instructions; move the repo\'s rules into AGENTS.md/CLAUDE.md and remove "rules" from features');
+  }
+  const updated = updateRulesyncConfig(config, { features: featuresFor(existing, INPUT_ROOTS), targets });
+  writeFileSync('rulesync.jsonc', updated);
+  syncInstructions(JSON.parse(updated.match(/"targets":\s*(\[[^\]]*\])/)?.[1] ?? '[]'));
   writeFileSync(MEMBERSHIP_FILE, `${JSON.stringify({ source, ref, groups }, null, 2)}\n`);
 
   console.log(`groups: ${groups.join(', ')}`);

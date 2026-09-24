@@ -143,7 +143,7 @@ jobs:
           fi
           echo "open=true" >> "$GITHUB_OUTPUT"
           changed=$(node ../engine/scripts/sync-consumer.mjs summary)
-          ignored=$(git ls-files --others --ignored --exclude-standard -- .agentspread .claude .agents .codex .github \
+          ignored=$(git ls-files --others --ignored --exclude-standard -- .agentspread AGENTS.md CLAUDE.md .claude .agents .codex .github \
             .cursor .opencode .cline .roo .kiro .junie .warp .qwen .augment | grep -v '\.local\.' | paste -sd' ' - || true)
           [ -z "$ignored" ] || echo "::warning::$REPO: .gitignore hides generated files: $ignored"
           # Release notes are free text, so a fixed heredoc delimiter could end the output early.
