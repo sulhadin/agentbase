@@ -30,7 +30,7 @@ To adopt a single repo by hand, run `npx agentspread adopt <org>/agentspread-con
 
 ### Before merging it
 
-- **Existing skills, subagents or commands** are imported into `.rulesync/`, where they stay the repo's own. Delete any that agentspread now ships under the same name, then run `npx rulesync@16 generate --delete`.
+- **Existing skills, subagents or commands** are imported into `.rulesync/`, where they stay the repo's own. Delete any that the content repo now ships under the same name, then run `npx rulesync@16 generate --delete`.
 - **Existing hooks** in `.claude/settings.json` or `.rulesync/hooks.json` stop adopt when a group ships hooks, since generation would replace them. Move them into the content repo's group named after the repo and re-run.
 - **`.gitignore`** must not hide generated folders, or their files are never committed. Adopt and the check both fail and list the hidden files. A bare `.claude` line is the usual culprit; replace it with:
   ```gitignore
