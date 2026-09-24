@@ -1,0 +1,29 @@
+#!/usr/bin/env node
+// Stand-in for gh while recording the setup demo: answers the calls setup makes with a made-up org,
+// so the recording shows no real repos and never touches GitHub.
+const args = process.argv.slice(2).join(' ');
+const topic = [{ name: 'agentspread-consumer' }];
+const repos = [
+  { name: 'agentspread-config', isPrivate: true },
+  { name: 'api', isPrivate: true, repositoryTopics: topic },
+  { name: 'billing-service', isPrivate: true, repositoryTopics: topic },
+  { name: 'docs-site', isPrivate: false },
+  { name: 'mobile-app', isPrivate: true },
+  { name: 'web', isPrivate: false, repositoryTopics: topic },
+];
+const files = {
+  'rulesync.jsonc': '{\n  "targets": ["claudecode", "codexcli", "cline"],\n  "features": ["skills"]\n}\n',
+  'agentspread.json': JSON.stringify({ source: 'acme/agentspread-config', ref: 'v1.4.0', groups: ['common', 'backend', 'web'] }),
+};
+const tree = ['common', 'backend', 'frontend', 'web'].map((g) => `groups/${g}/skills/example/SKILL.md`);
+
+let out;
+if (args.startsWith('repo view')) out = 'acme/agentspread-config';
+else if (args.startsWith('repo list')) out = JSON.stringify(repos);
+else if (/^api repos\/acme\/[^/]+\/git\/trees\//.test(args)) out = tree.join('\n');
+else {
+  const file = args.match(/^api repos\/acme\/[^/]+\/contents\/(\S+)/)?.[1];
+  if (!files[file]) process.exit(1);
+  out = Buffer.from(files[file]).toString('base64');
+}
+console.log(out);

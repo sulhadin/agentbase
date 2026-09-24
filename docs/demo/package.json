@@ -1,0 +1,5 @@
+{
+  "name": "agentspread-config",
+  "private": true,
+  "scripts": { "setup": "agentspread setup" }
+}

@@ -76,7 +76,7 @@ const pickGroups = (available, { current = [], autoFor = [] }) => {
     loop: false,
     choices: optional.map((g) => {
       const auto = autoFor.includes(g);
-      return { name: auto ? `${g}  (added to ${g} automatically)` : g, short: g, value: g, checked: current.includes(g), disabled: auto && 'auto' };
+      return { name: g, short: g, value: g, checked: current.includes(g), disabled: auto && `(added to ${g} automatically)` };
     }),
   }));
 };
@@ -119,7 +119,7 @@ if (mode === 'reconfigure') {
   console.log(`
   Repo:        ${repo} (stays on ${consumerSource} ${ref})
   Groups now:  ${currentGroups.join(', ')}
-  Groups new:  ${['common', ...selectedGroups, ...(groups.includes(repo) ? [repo] : [])].join(', ')}
+  Groups new:  ${[...new Set(['common', ...selectedGroups, ...(groups.includes(repo) ? [repo] : [])])].join(', ')}
   Agents now:  ${currentTargets.join(', ')}
   Agents new:  ${targets.join(', ')}
   Opens or updates a PR on chore/agentspread-reconfigure.

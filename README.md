@@ -65,41 +65,7 @@ The workflow computes the next version from the commits since the last tag, upda
 4. Tick its groups the same way. `common` and the group named after the repo are always included. This step is skipped when the content repo has no other groups.
 5. Check the summary and answer **Open the PR?**.
 
-At step 3 the terminal looks like this:
-
-```
-✔ What do you want to do? Reconfigure an adopted repo's groups and agents
-✔ Repo to reconfigure web
-? Agents to generate files for
-❯◉ Claude Code     .claude/
- ◉ Codex           .agents/skills, .codex/
- ◯ Cursor          .agents/skills
- ◯ Antigravity     .agents/skills
- ◯ GitHub Copilot  .agents/skills
- ◯ OpenCode        .agents/skills
- ◉ Cline           .cline/skills
- ◯ Roo Code        .roo/skills
- ◯ Kiro            .kiro/skills
- ◯ Junie           .junie/skills
- ◯ Warp            .warp/skills
- ◯ Qwen Code       .qwen/skills
- ◯ Augment         .augment/skills
-
-↑↓ navigate • space select • a all • i invert • ⏎ submit
-```
-
-and before the PR opens, the summary shows what changes:
-
-```
-  Repo:        web (stays on acme/agentspread-config v1.4.0)
-  Groups now:  common, backend, web
-  Groups new:  common, web
-  Agents now:  claudecode, codexcli, cline
-  Agents new:  claudecode, codexcli
-  Opens or updates a PR on chore/agentspread-reconfigure.
-
-? Open the PR? (Y/n)
-```
+![npm run setup reconfiguring a repo: pick the repo, untick an agent, swap a group, review the summary](docs/assets/reconfigure.gif)
 
 The PR keeps the repo on its current release and only regenerates its files for the new selection.
 
