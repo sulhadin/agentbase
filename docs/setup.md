@@ -19,7 +19,7 @@ Any name works. Private is the safer default: the repo holds your agents' prompt
 | `.github/workflows/agentspread-sync.yml` | *Actions → sync consumers*: rolls an existing tag out again |
 | `.github/workflows/agentspread-check.yml` | lints `groups/` and PR titles |
 | `.github/dependabot.yml` | PRs when a new agentspread version is out |
-| `package.json` | pins agentspread for `npm run setup`, `npm run reconfigure` and `npm run lint` |
+| `package.json` | pins agentspread for `npm run setup` and `npm run lint` |
 | `README.md`, `.gitignore` | a short guide for your team; `node_modules/` ignored |
 
 The workflows call agentspread's reusable workflows at a pinned version. Nothing in the content repo lists consumer repos: sync finds them at run time by the `agentspread-consumer` topic.
@@ -45,7 +45,7 @@ Consumers pin a release, so one must exist before onboarding. Versions come from
    git tag v0.1.0 "$(git rev-list --max-parents=0 HEAD)" && git push origin v0.1.0
    ```
 3. Commit your content with a `feat` message, e.g. `feat(groups): add initial skills`, and push it to `main`.
-4. *Actions → release → Run workflow*, or `gh workflow run agentspread-release.yml --repo <org>/agentspread-config`. *Releases* then shows `v1.0.0` (or `v0.2.0`). *Nothing to release* means there was no `feat`, `fix`, `perf` or breaking commit.
+4. *Actions → release → Run workflow*, or `gh workflow run agentspread-release.yml --repo <org>/agentspread-config`. *Releases* then shows `v1.0.0` (or `v0.2.0`). A *nothing to release* notice means there was no `feat`, `fix`, `perf` or breaking commit since the last tag.
 
 ## 5. Onboard consumer repos
 

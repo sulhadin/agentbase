@@ -1,6 +1,10 @@
 # Consumer repos
 
+A consumer repo is any repo that receives the content repo's groups. It is onboarded once with `npm run setup` in the content repo; after that, every content release reaches it as a PR.
+
 ## Agents
+
+`setup` asks which agents each repo uses; `--targets` takes the same values.
 
 | Agent | `--targets` value | Writes |
 |---|---|---|

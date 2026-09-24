@@ -16,13 +16,13 @@ Claude Code · Codex · Cursor · Antigravity · Copilot · OpenCode · and more
 Teams copy the same agent config into every repo, and the copies drift. agentspread keeps it in **one repo**, split into groups (org-wide, per platform, per repo). Merge conventional-commit PRs, press *Run workflow*, and each consumer repo gets a pull request with exactly its groups, generated for every AI tool it uses. Versions, tags and `CHANGELOG.md` are computed for you.
 
 ```
- your-org/agentspread-config (content repo)           each consumer repo
- ─────────────────────────────────           ──────────────────
+ <org>/agentspread-config (content repo)     each consumer repo
+ ───────────────────────────────────────     ──────────────────
  groups/common/  ─┐                          PR "chore(agentspread): update shared AI agent config to v1.2.0"
  groups/backend/ ─┼─ release v1.2.0 ──────▶    .agentspread/      its groups, copied at v1.2.0
- groups/web/     ─┘                             .claude/           skills, agents, commands, hooks → Claude Code
-                                                .agents/skills/    → Codex, Cursor, Antigravity, Copilot, OpenCode
-                                                .codex/            agents, hooks → Codex
+ groups/web/     ─┘                            .claude/           skills, agents, commands, hooks → Claude Code
+                                               .agents/skills/    → Codex, Cursor, Antigravity, Copilot, OpenCode
+                                               .codex/            agents, hooks → Codex
 ```
 
 agentspread is the engine: an npm package (`npx agentspread …`) plus reusable GitHub workflows. Your **content repo** holds only your groups and three small workflow files that call agentspread at a pinned version, and Dependabot opens a PR when a new agentspread version is out. Sync copies each release into the consumer's committed `.agentspread/`, and [rulesync](https://github.com/dyoshikawa/rulesync) generates each tool's files from it. Everything is committed, so every clone and cloud agent session sees it without a build step or a token.
