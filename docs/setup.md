@@ -1,12 +1,12 @@
 # Setting up agentspread for your org
 
-You need `gh` (logged in), Node 22+, and admin rights on the org.
+You need `gh` (logged in), Node 22+, and admin rights on the org. `npx agentspread init --force` overwrites an existing scaffold.
 
 ## 1. Create your content repo
 
 ```bash
-gh repo create <org>/ai-config --private --clone
-cd ai-config
+gh repo create <org>/agentspread-config --private --clone
+cd agentspread-config
 npx agentspread init
 ```
 
@@ -19,7 +19,8 @@ Any name works. Private is the safer default: the repo holds your agents' prompt
 | `.github/workflows/agentspread-sync.yml` | *Actions → sync consumers*: rolls an existing tag out again |
 | `.github/workflows/agentspread-check.yml` | lints `groups/` and PR titles |
 | `.github/dependabot.yml` | PRs when a new agentspread version is out |
-| `package.json` | pins agentspread for `npm run setup` and `npm run lint` |
+| `package.json` | pins agentspread for `npm run setup`, `npm run reconfigure` and `npm run lint` |
+| `README.md`, `.gitignore` | a short guide for your team; `node_modules/` ignored |
 
 The workflows call agentspread's reusable workflows at a pinned version. Nothing in the content repo lists consumer repos: sync finds them at run time by the `agentspread-consumer` topic.
 
@@ -37,14 +38,14 @@ Consumers pin a release, so one must exist before onboarding. Versions come from
 
 1. Make squash merges use the PR title:
    ```bash
-   gh api -X PATCH repos/<org>/ai-config -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=PR_BODY
+   gh api -X PATCH repos/<org>/agentspread-config -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=PR_BODY
    ```
 2. Optional, to start at `0.x` instead of `v1.0.0`, tag the first commit:
    ```bash
    git tag v0.1.0 "$(git rev-list --max-parents=0 HEAD)" && git push origin v0.1.0
    ```
 3. Commit your content with a `feat` message, e.g. `feat(groups): add initial skills`, and push it to `main`.
-4. *Actions → release → Run workflow*, or `gh workflow run agentspread-release.yml --repo <org>/ai-config`. *Releases* then shows `v1.0.0` (or `v0.2.0`). *Nothing to release* means the commit was not `feat` or `fix`.
+4. *Actions → release → Run workflow*, or `gh workflow run agentspread-release.yml --repo <org>/agentspread-config`. *Releases* then shows `v1.0.0` (or `v0.2.0`). *Nothing to release* means there was no `feat`, `fix`, `perf` or breaking commit.
 
 ## 5. Onboard consumer repos
 
@@ -61,10 +62,10 @@ Non-interactive: `npx agentspread onboard web api --targets claudecode,codexcli 
 
 ## 6. Check it works
 
-Merge the adoption PRs, then roll the latest release out by hand:
+Merge the adoption PRs, then roll the latest release out by hand. Like the release, it must run from the release branch, since both use the `release` environment:
 
 ```bash
-gh workflow run agentspread-sync.yml --repo <org>/ai-config -f ref=$(gh release view --repo <org>/ai-config --json tagName -q .tagName)
+gh workflow run agentspread-sync.yml --repo <org>/agentspread-config -f ref=$(gh release view --repo <org>/agentspread-config --json tagName -q .tagName)
 ```
 
 The *sync consumers* run lists your repos under `rollout`. A repo already on that release gets no PR; one whose adoption PR isn't merged yet is skipped with a notice.

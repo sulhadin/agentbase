@@ -16,7 +16,7 @@ Claude Code · Codex · Cursor · Antigravity · Copilot · OpenCode · and more
 Teams copy the same agent config into every repo, and the copies drift. agentspread keeps it in **one repo**, split into groups (org-wide, per platform, per repo). Merge conventional-commit PRs, press *Run workflow*, and each consumer repo gets a pull request with exactly its groups, generated for every AI tool it uses. Versions, tags and `CHANGELOG.md` are computed for you.
 
 ```
- your-org/ai-config (content repo)           each consumer repo
+ your-org/agentspread-config (content repo)           each consumer repo
  ─────────────────────────────────           ──────────────────
  groups/common/  ─┐                          PR "chore(agentspread): update shared AI agent config to v1.2.0"
  groups/backend/ ─┼─ release v1.2.0 ──────▶    .agentspread/      its groups, copied at v1.2.0
@@ -31,7 +31,7 @@ agentspread is the engine: an npm package (`npx agentspread …`) plus reusable 
 
 You need `gh` (logged in), Node 22+, and admin rights on the org. The full walkthrough is in [docs/setup.md](docs/setup.md).
 
-1. **Create the content repo:** `gh repo create <org>/ai-config --private --clone && cd ai-config && npx agentspread init`
+1. **Create the content repo:** `gh repo create <org>/agentspread-config --private --clone && cd agentspread-config && npx agentspread init`
 2. **Add your content** under `groups/`: see [Writing groups](docs/groups.md).
 3. **Create the GitHub App** that opens the PRs: see [The GitHub App](docs/github-app.md).
 4. **Release:** commit with a `feat:` message, then *Actions → release → Run workflow*.

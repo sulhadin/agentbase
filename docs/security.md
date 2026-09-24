@@ -9,6 +9,6 @@ What agentspread ships runs inside every developer's agent in every consumer: ho
 
 What the workflows do to limit the blast radius:
 
-- Each job gets App tokens scoped to one repo and the minimum permissions; checkouts don't keep credentials.
+- Rollout jobs get an App token scoped to one consumer with the minimum permissions, and their checkouts don't keep it. Only the release job's checkout keeps its token, to push the release commit and tag.
 - rulesync runs with no token at all, and the npm registry is pinned so a consumer's `.npmrc` can't swap packages.
 - Consumer CI needs no secrets: the content is committed in `.agentspread/`.

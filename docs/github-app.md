@@ -10,7 +10,7 @@ Personal account: *Settings → Developer settings → GitHub Apps → New GitHu
 | Field | Value |
 |---|---|
 | GitHub App name | anything unique on GitHub, e.g. `<org>-agentspread`; it is the bot's display name |
-| Homepage URL | required; `https://github.com/<org>/ai-config` is fine |
+| Homepage URL | required; `https://github.com/<org>/agentspread-config` is fine |
 | Webhook | untick *Active* |
 | Repository permissions | *Contents* → Read and write, *Pull requests* → Read and write (*Metadata* → Read-only is added automatically) |
 | Where can this GitHub App be installed? | *Only on this account* |
@@ -27,8 +27,8 @@ Click **Create GitHub App**.
 In the content repo: *Settings → Environments → New environment* named `release`. Under *Deployment branches*, choose *Selected branches* and add your release branch (`main`). Then store both values as **environment** secrets and delete the `.pem`:
 
 ```bash
-gh secret set AGENTSPREAD_APP_ID --repo <org>/ai-config --env release --body 1234567
-gh secret set AGENTSPREAD_APP_PRIVATE_KEY --repo <org>/ai-config --env release < path/to/the.private-key.pem
+gh secret set AGENTSPREAD_APP_ID --repo <org>/agentspread-config --env release --body 1234567
+gh secret set AGENTSPREAD_APP_PRIVATE_KEY --repo <org>/agentspread-config --env release < path/to/the.private-key.pem
 ```
 
 The App can write to every repo it is installed on. Keeping its key in an environment limited to the release branch stops a workflow on any other branch from using it.

@@ -16,7 +16,7 @@ groups/
 
 - `common` is required and reaches every consumer. Other groups are picked per repo when onboarding; a repo can be in several.
 - A group named exactly like a repo attaches to that repo automatically, even if you create it later. Use it for things that belong to one repo only, and don't name a category group after a repo.
-- A group can have any mix of the parts. Group, skill, subagent and command names are lowercase kebab-case and unique across groups.
+- A group can have any mix of the parts. Group and skill names must be lowercase kebab-case; use the same style for subagents and commands. Skill, subagent and command names must be unique across groups.
 
 ## Skills
 
@@ -41,7 +41,7 @@ Generation replaces the whole `hooks` key in a consumer's `.claude/settings.json
 
 ## Lint
 
-`npm run lint` locally, and the check workflow on every PR. It fails on layout mistakes (names, missing hook scripts) and warns on what needs a careful review, because it runs code or skips prompts on every developer's machine: hooks, `allowed-tools`, `` !`command` `` lines and frontmatter hooks.
+`npm run lint` locally, and the check workflow on every PR. It fails on layout mistakes: bad names, duplicates, missing hook scripts, and content left in old root folders (`skills/`, `.rulesync/`, `plugins/`, `.claude-plugin/`) instead of `groups/`. It warns on what needs a careful review, because it runs code or skips prompts on every developer's machine: hooks, `allowed-tools`, `permissionMode`, `` !`command` `` lines and frontmatter hooks.
 
 ## Gotchas
 
