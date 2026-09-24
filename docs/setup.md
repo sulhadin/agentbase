@@ -19,7 +19,7 @@ Any name works. Private is the safer default: the repo holds your agents' prompt
 | `.github/workflows/agentspread-sync.yml` | the **sync consumers** workflow: rolls an existing tag out again |
 | `.github/workflows/agentspread-check.yml` | lints `groups/` and PR titles |
 | `.github/dependabot.yml` | PRs when a new agentspread version is out |
-| `package.json` | pins agentspread for `npm run setup` and `npm run lint` |
+| `package.json` | pins agentspread for `npm run onboard`, `npm run reconfigure` and `npm run lint` |
 | `README.md`, `.gitignore` | a short guide for your team; `node_modules/` ignored |
 
 The workflows call agentspread's reusable workflows at a pinned version. Nothing in the content repo lists consumer repos: sync finds them at run time by the `agentspread-consumer` topic.
@@ -42,7 +42,7 @@ Give the App access to them first ([step 4 of the App guide](github-app.md#4-ins
 
 ```bash
 npm install
-npm run setup
+npm run onboard
 ```
 
 Pick the repos, the agents and the groups. Repos that need different groups are onboarded in separate runs. Each repo gets an adoption PR; see [Consumer repos](consumer-repos.md) for what it adds and what to watch for.

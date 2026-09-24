@@ -3,8 +3,10 @@ import { fileURLToPath } from 'node:url';
 import { checkbox, confirm, select } from '@inquirer/prompts';
 import { fetchTree } from './sync-consumer.mjs';
 
+// Asks for the choices behind `agentspread onboard` and `agentspread reconfigure` when they get no arguments.
+const preset = ['onboard', 'reconfigure'].find((m) => process.argv[2] === m);
 if (process.argv.includes('--help') || process.argv.includes('-h')) {
-  console.log('Usage: npx agentspread setup\n\nRun in the content repo: onboard consumer repos or reconfigure an adopted one, interactively.');
+  console.log('Usage: npx agentspread onboard | reconfigure\n\nRun in the content repo; without arguments, both ask for the repos, agents and groups.');
   process.exit(0);
 }
 
@@ -88,7 +90,11 @@ const repos = JSON.parse(
 const tagged = repos.filter((r) => (r.repositoryTopics ?? []).some((t) => t.name === 'agentspread-consumer'));
 const adopted = new Set(tagged.filter((r) => readFile(r.name, 'rulesync.jsonc') !== null).map((r) => r.name));
 
-const mode = await ask(select({
+if (preset === 'reconfigure' && !adopted.size) {
+  console.error(`No repo has adopted ${source} yet; run npx agentspread onboard first.`);
+  process.exit(1);
+}
+const mode = preset ?? await ask(select({
   message: 'What do you want to do?',
   choices: [
     { name: 'Onboard new repos', value: 'onboard' },

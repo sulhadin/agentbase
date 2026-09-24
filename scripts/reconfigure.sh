@@ -2,6 +2,7 @@
 set -euo pipefail
 
 USAGE='Change a consumer'"'"'s groups and agents, keeping its release, and open a PR. Run inside the content repo:
+  npx agentspread reconfigure                   asks for the repo, agents and groups
   npx agentspread reconfigure <repo> --groups backend,web --targets claudecode,codexcli
 --groups sets the full list (common and the group named after the repo are always kept);
 --targets sets the full list of rulesync targets. Either may be left out to keep it as is.'

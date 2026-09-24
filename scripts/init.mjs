@@ -76,5 +76,5 @@ Next:
        gh secret set AGENTSPREAD_APP_ID --env release --body <app id>
        gh secret set AGENTSPREAD_APP_PRIVATE_KEY --env release < <downloaded>.private-key.pem
   4. Run the release workflow from the Actions tab, for the first release.
-  5. npm install && npm run setup, to pick the repos that consume it.
+  5. npm install && npm run onboard, to pick the repos that consume it.
 `);

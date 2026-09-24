@@ -17,16 +17,10 @@ Type "export PATH=$PWD/docs/demo/bin:$PATH PS1='$ ' && cd docs/demo && clear"
 Enter
 Show
 
-Type "npm run setup"
+Type "npm run reconfigure"
 Sleep 400ms
 Enter
 Sleep 2s
-
-# What do you want to do? -> reconfigure
-Down
-Sleep 600ms
-Enter
-Sleep 1s
 
 # Repo to reconfigure: api, billing-service, web
 Down

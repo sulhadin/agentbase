@@ -40,7 +40,7 @@ You need `gh` (logged in), Node 22+, and admin rights on the org. The full walkt
 2. **Add your content** under `groups/`: see [Writing groups](docs/groups.md).
 3. **Create the GitHub App** that opens the PRs: see [The GitHub App](docs/github-app.md).
 4. **Release:** commit with a `feat:` message, then run the **release** workflow in the content repo's Actions tab. See [Releasing](docs/releasing.md).
-5. **Onboard repos:** `npm install && npm run setup`, pick repos, agents and groups, and merge the adoption PRs. See [Consumer repos](docs/consumer-repos.md).
+5. **Onboard repos:** `npm install && npm run onboard`, pick repos, agents and groups, and merge the adoption PRs. See [Consumer repos](docs/consumer-repos.md).
 
 ## Day to day
 
@@ -59,13 +59,13 @@ The workflow computes the next version from the commits since the last tag, upda
 
 ### Change a repo's groups or agents
 
-1. In the content repo, run `npm run setup`. It lists your repos and asks what you want to do.
-2. Choose **Reconfigure an adopted repo's groups and agents**, then pick the repo from the list of adopted ones.
+1. In the content repo, run `npm run reconfigure`.
+2. Pick the repo from the list of adopted ones.
 3. Tick the agents the repo should have files for (space toggles, enter confirms). Its current agents are already ticked.
 4. Tick its groups the same way. `common` and the group named after the repo are always included. This step is skipped when the content repo has no other groups.
 5. Check the summary and answer **Open the PR?**.
 
-![npm run setup reconfiguring a repo: pick the repo, untick an agent, swap a group, review the summary](docs/assets/reconfigure.gif)
+![npm run reconfigure: pick the repo, untick an agent, swap a group, review the summary](docs/assets/reconfigure.gif)
 
 The PR keeps the repo on its current release and only regenerates its files for the new selection.
 
