@@ -1,15 +1,22 @@
-# Run by hand from the release branch: main, or the repo variable RELEASE_BRANCH when set.
-# Picks the version from conventional commits since the last tag, updates CHANGELOG.md, tags,
-# publishes the GitHub release and rolls it out to consumers.
+# Reusable: called by a content repo's own release workflow, e.g.
+#   jobs: { release: { uses: sulhadin/agentbase/.github/workflows/release.yml@v1.0.0, secrets: inherit } }
+# Picks the version from the content repo's conventional commits, updates its CHANGELOG.md, tags,
+# publishes the GitHub release and rolls it out to every consumer (sync.yml).
 name: release
 on:
-  workflow_dispatch:
-concurrency: release
+  workflow_call:
+    outputs:
+      tag:
+        value: ${{ jobs.release.outputs.tag }}
+    secrets:
+      AGENTBASE_APP_ID: { required: true }
+      AGENTBASE_APP_PRIVATE_KEY: { required: true }
 jobs:
   release:
     runs-on: ubuntu-latest
-    # Restricting this environment to the release branch keeps the App key away from other branches.
+    # The caller's environment: restricting it to the release branch keeps the App key away from others.
     environment: release
+    concurrency: agentbase-release
     outputs:
       tag: ${{ steps.release.outputs.tag }}
     env:
@@ -31,12 +38,22 @@ jobs:
           permission-contents: write
       - uses: actions/checkout@v7
         with:
+          path: content
           fetch-depth: 0
           token: ${{ steps.app.outputs.token }}
+      # This workflow's own repo and commit, so the scripts always match the version the caller pinned.
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: engine
+          persist-credentials: false
       - uses: actions/setup-node@v7
-        with: { node-version: 22, cache: npm }
+        with: { node-version: 22, cache: npm, cache-dependency-path: engine/package-lock.json }
       - run: npm ci
+        working-directory: engine
       - id: release
+        working-directory: content
         env:
           GITHUB_TOKEN: ${{ steps.app.outputs.token }}
           GIT_AUTHOR_NAME: agentbase-release
@@ -44,7 +61,7 @@ jobs:
           GIT_COMMITTER_NAME: agentbase-release
           GIT_COMMITTER_EMAIL: agentbase-release@users.noreply.github.com
         run: |
-          npx semantic-release
+          ../engine/node_modules/.bin/semantic-release --extends ../engine/release.content.cjs
           grep -q '^tag=' "$GITHUB_OUTPUT" || echo "::notice::No feat/fix/breaking commits since the last tag — nothing to release."
   sync:
     needs: release

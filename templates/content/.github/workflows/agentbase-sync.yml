@@ -1,0 +1,16 @@
+# Rolls an existing release out again, e.g. to one repo only. Run it from the release branch.
+name: sync consumers
+on:
+  workflow_dispatch:
+    inputs:
+      ref: { description: "Tag to roll out (e.g. v1.4.0)", type: string, required: true }
+      repo: { description: "Only this consumer repo (optional)", type: string, required: false }
+      force: { description: "Allow rolling a repo back to an older tag", type: boolean, default: false }
+jobs:
+  sync:
+    uses: __ENGINE__/.github/workflows/sync.yml@v__VERSION__
+    with:
+      ref: ${{ inputs.ref }}
+      repo: ${{ inputs.repo }}
+      force: ${{ inputs.force }}
+    secrets: inherit

@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-USAGE='Change an adopted repo'"'"'s groups and agents, keeping its agentbase release, and open a PR:
-  npm run reconfigure -- <repo> --groups backend,web --targets claudecode,codexcli
+USAGE='Change a consumer'"'"'s groups and agents, keeping its release, and open a PR. Run inside the content repo:
+  npx agentbase reconfigure <repo> --groups backend,web --targets claudecode,codexcli
 --groups sets the full list (common and the group named after the repo are always kept);
 --targets sets the full list of rulesync targets. Either may be left out to keep it as is.'
 
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
-OWNER=$(cd "$ROOT" && gh repo view --json owner -q .owner.login)
+ROOT="${AGENTBASE_ROOT:-$(cd "$(dirname "$0")/.." && pwd)/}"
+SOURCE=$(gh repo view --json nameWithOwner -q .nameWithOwner) \
+  || { echo "✗ run this inside the content repo (a GitHub checkout with groups/)" >&2; exit 1; }
+OWNER="${SOURCE%%/*}"
 BRANCH=chore/agentbase-reconfigure
 
 REPO=""
@@ -36,8 +38,11 @@ cd "$dir"
 git switch -q -c "$BRANCH"
 
 ref=$(node -e 'console.log(require("./agentbase.json").ref)')
+# Consumers adopted before agentbase.json recorded a source get this content repo, as sync would give them.
+source=$(node -e 'console.log(require("./agentbase.json").source ?? "")')
+source="${source:-$SOURCE}"
 before=$(describe)
-node "$ROOT/scripts/sync-consumer.mjs" apply "$ref" "$OWNER" "${REPO#*/}" "${APPLY_FLAGS[@]}"
+node "${ROOT}scripts/sync-consumer.mjs" apply "$ref" "$source" "${REPO#*/}" "${APPLY_FLAGS[@]}"
 npx --yes rulesync@16 generate --delete
 after=$(describe)
 
@@ -55,7 +60,7 @@ git add -A
 git commit -q -F - <<EOF
 $title
 
-Keep agentbase $ref and regenerate for the new selection.
+Keep $source $ref and regenerate for the new selection.
 
 Before: $before
 After: $after
@@ -71,5 +76,5 @@ else
 - After: $after
 
 ## Description
-Changes which agentbase groups and agents this repo gets, staying on agentbase \`$ref\`. The next agentbase release keeps this selection."
+Changes which groups and agents this repo gets from \`$source\`, staying on \`$ref\`. Later releases keep this selection."
 fi

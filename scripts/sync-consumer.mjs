@@ -1,6 +1,7 @@
-// Keeps a consumer checkout in step with an agentbase release. Run from the consumer's root:
-//   node sync-consumer.mjs apply <ref> <owner> <repo> [--groups a,b | --set-groups a,b] [--targets a,b]
-//                                [--from <agentbase checkout>] [--force]
+// Keeps a consumer checkout in step with a release of its content repo (the repo holding groups/).
+// Run from the consumer's root:
+//   node sync-consumer.mjs apply <ref> <content owner/repo> <consumer repo> [--groups a,b | --set-groups a,b]
+//                                [--targets a,b] [--from <content checkout>] [--force]
 //   node sync-consumer.mjs summary
 // The groups' content is copied into .agentbase/ (committed) and rulesync generates every agent's files
 // from it plus the repo's own .rulesync/, so nothing is fetched at generate time and cloud agents see it all.
@@ -28,8 +29,14 @@ export function readMembership(text) {
   const data = JSON.parse(text);
   const ok = Array.isArray(data.groups) && data.groups.every((g) => typeof g === 'string');
   if (!ok) throw new Error(`${MEMBERSHIP_FILE}: "groups" must be an array of group names`);
-  return { ref: typeof data.ref === 'string' ? data.ref : null, groups: data.groups };
+  const str = (v) => (typeof v === 'string' ? v : null);
+  return { source: str(data.source), ref: str(data.ref), groups: data.groups };
 }
+
+// Before content repos had any name, a consumer's content always came from <owner>/agentbase.
+const legacySource = (source) => `${source.split('/')[0]}/agentbase`;
+const sourcePattern = (source) =>
+  `(?:${escapeRegExp(source)}|${escapeRegExp(legacySource(source))})(?::[^"]*)?`;
 
 export function resolveGroups(current, { available, repo, requested = [] }) {
   const unknown = requested.filter((g) => !available.includes(g));
@@ -107,11 +114,11 @@ export function featuresFor(existing, roots) {
 
 // Edits rulesync.jsonc as text to keep its comments: sets features and inputRoots, and drops the
 // agentbase `sources` entries of consumers adopted before .agentbase/ existed.
-export function updateRulesyncConfig(text, { owner, features, targets }) {
+export function updateRulesyncConfig(text, { source, features, targets }) {
   const list = (xs) => `[${xs.map((x) => `"${x}"`).join(', ')}]`;
   let lines = text.split('\n');
 
-  const ours = new RegExp(`"source":\\s*"${escapeRegExp(owner)}/agentbase(?::[^"]*)?"`, 'i');
+  const ours = new RegExp(`"source":\\s*"${sourcePattern(source)}"`, 'i');
   const open = lines.findIndex((l) => /"sources":\s*\[/.test(l));
   if (open >= 0) {
     if (/"sources":\s*\[.*\]/.test(lines[open])) {
@@ -180,9 +187,9 @@ export function summarize(nameStatus) {
   return parts.join('; ') || 'none';
 }
 
-function downloadAgentbase(owner, ref) {
+function downloadSource(source, ref) {
   const dir = mkdtempSync(join(tmpdir(), 'agentbase-'));
-  const archive = execFileSync('gh', ['api', `repos/${owner}/agentbase/tarball/${encodeURIComponent(ref)}`], {
+  const archive = execFileSync('gh', ['api', `repos/${source}/tarball/${encodeURIComponent(ref)}`], {
     maxBuffer: 256 * 1024 * 1024,
   });
   writeFileSync(join(dir, 'src.tgz'), archive);
@@ -191,26 +198,33 @@ function downloadAgentbase(owner, ref) {
   return join(dir, root.name);
 }
 
-export function fetchTree(owner, ref) {
+export function fetchTree(source, ref) {
   const out = execFileSync(
     'gh',
-    ['api', `repos/${owner}/agentbase/git/trees/${encodeURIComponent(ref)}?recursive=1`, '-q', '.tree[].path'],
+    ['api', `repos/${source}/git/trees/${encodeURIComponent(ref)}?recursive=1`, '-q', '.tree[].path'],
     { encoding: 'utf8' },
   );
   return parseTree(out.split('\n').filter(Boolean));
 }
 
-function apply(ref, owner, repo, { groups: requested = [], setGroups, targets, from, force = false }) {
+function apply(ref, source, repo, { groups: requested = [], setGroups, targets, from, force = false }) {
+  if (!/^[^/\s]+\/[^/\s]+$/.test(source)) throw new Error(`content repo must be owner/name, got "${source}"`);
   if (!existsSync('rulesync.jsonc')) throw new Error('run from a consumer root with rulesync.jsonc');
   const config = readFileSync('rulesync.jsonc', 'utf8');
-  const legacyRef = config.match(new RegExp(`"source":\\s*"${escapeRegExp(owner)}/agentbase[^"]*"[^}]*"ref":\\s*"([^"]+)"`, 'i'))?.[1];
+  const legacy = config.match(new RegExp(`"source":\\s*"(${sourcePattern(source)})"[^}]*"ref":\\s*"([^"]+)"`, 'i'));
   const membership = existsSync(MEMBERSHIP_FILE) ? readMembership(readFileSync(MEMBERSHIP_FILE, 'utf8')) : null;
-  const currentRef = membership?.ref ?? legacyRef ?? null;
-  if (!force && isDowngrade(currentRef, ref)) throw new Error(`refusing to go from ${currentRef} back to ${ref}; pass --force`);
+  const current = membership
+    ? { source: membership.source ?? legacySource(source), ref: membership.ref }
+    : legacy && { source: legacy[1].split(':')[0], ref: legacy[2] };
+  // Versions of two different content repos say nothing about each other.
+  const sameSource = current?.source?.toLowerCase() === source.toLowerCase();
+  if (!force && sameSource && isDowngrade(current.ref, ref)) {
+    throw new Error(`refusing to go from ${current.ref} back to ${ref}; pass --force`);
+  }
 
-  const agentbaseDir = from ?? downloadAgentbase(owner, ref);
+  const agentbaseDir = from ?? downloadSource(source, ref);
   const available = listDir(join(agentbaseDir, 'groups')).filter((e) => e.isDirectory()).map((e) => e.name).sort();
-  if (!available.includes('common')) throw new Error(`agentbase ${ref} has no groups/common/`);
+  if (!available.includes('common')) throw new Error(`${source} ${ref} has no groups/common/`);
   // --set-groups replaces the membership (reconfiguring); --groups only adds to it (adopting, syncing).
   const { groups, dropped } = setGroups
     ? resolveGroups(null, { available, repo, requested: setGroups })
@@ -230,7 +244,7 @@ function apply(ref, owner, repo, { groups: requested = [], setGroups, targets, f
   }
 
   const existing = JSON.parse(config.replace(/^\s*\/\/.*$/gm, '').match(/"features":\s*(\[[^\]]*\])/)?.[1] ?? '[]');
-  const updated = updateRulesyncConfig(config, { owner, features: featuresFor(existing, INPUT_ROOTS), targets });
+  const updated = updateRulesyncConfig(config, { source, features: featuresFor(existing, INPUT_ROOTS), targets });
   writeFileSync('rulesync.jsonc', updated);
   if (existsSync('rulesync.lock') && !/"sources":\s*\[[^\]]*\{/s.test(updated.replace(/^\s*\/\/.*$/gm, ''))) {
     rmSync('rulesync.lock');
@@ -245,10 +259,10 @@ function apply(ref, owner, repo, { groups: requested = [], setGroups, targets, f
       writeFileSync('.claude/settings.json', `${JSON.stringify(after, null, 2)}\n`);
     }
   }
-  writeFileSync(MEMBERSHIP_FILE, `${JSON.stringify({ ref, groups }, null, 2)}\n`);
+  writeFileSync(MEMBERSHIP_FILE, `${JSON.stringify({ source, ref, groups }, null, 2)}\n`);
 
   console.log(`groups: ${groups.join(', ')}`);
-  if (dropped.length) console.log(`dropped groups no longer in agentbase ${ref}: ${dropped.join(', ')}`);
+  if (dropped.length) console.log(`dropped groups no longer in ${source} ${ref}: ${dropped.join(', ')}`);
 }
 
 function parseArgs(args) {
@@ -268,15 +282,15 @@ function parseArgs(args) {
 function main([command, ...args]) {
   try {
     if (command === 'apply') {
-      const { positional: [ref, owner, repo], opts } = parseArgs(args);
-      if (!ref || !owner || !repo) throw new Error('usage: apply <ref> <owner> <repo> [--groups a,b | --set-groups a,b] [--targets a,b] [--from dir] [--force]');
+      const { positional: [ref, source, repo], opts } = parseArgs(args);
+      if (!ref || !source || !repo) throw new Error('usage: apply <ref> <content owner/repo> <consumer repo> [--groups a,b | --set-groups a,b] [--targets a,b] [--from dir] [--force]');
       if (opts.targets?.length === 0) throw new Error('--targets needs at least one agent');
-      apply(ref, owner, repo, opts);
+      apply(ref, source, repo, opts);
     } else if (command === 'summary') {
       execFileSync('git', ['add', '--all', '--intent-to-add', VENDOR_DIR]);
       console.log(summarize(execFileSync('git', ['diff', '--name-status', '--', VENDOR_DIR], { encoding: 'utf8' })));
     } else {
-      throw new Error('usage: sync-consumer.mjs apply <ref> <owner> <repo> [...] | summary');
+      throw new Error('usage: sync-consumer.mjs apply <ref> <content owner/repo> <consumer repo> [...] | summary');
     }
   } catch (err) {
     console.error(`✗ ${err.message}`);

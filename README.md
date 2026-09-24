@@ -16,8 +16,8 @@ Claude Code · Codex · Cursor · Antigravity · Copilot · OpenCode · and more
 Teams copy the same agent config into every repo, and the copies drift. agentbase keeps it in **one repo**, split into groups (org-wide, per platform, per repo). Merge conventional-commit PRs, press *Run workflow*, and each consumer repo gets a pull request with exactly its groups, generated for every AI tool it uses. Versions, tags and `CHANGELOG.md` are computed for you.
 
 ```
- your-org/agentbase                          each consumer repo
- ──────────────────                          ──────────────────
+ your-org/ai-config (content repo)           each consumer repo
+ ─────────────────────────────────           ──────────────────
  groups/common/  ─┐                          PR "chore(agentbase): update shared AI agent config to v1.2.0"
  groups/backend/ ─┼─ release v1.2.0 ──────▶    .agentbase/        its groups, copied at v1.2.0
  groups/web/     ─┘                             .claude/           skills, agents, commands, hooks → Claude Code
@@ -25,7 +25,7 @@ Teams copy the same agent config into every repo, and the copies drift. agentbas
                                                 .codex/            agents, hooks → Codex
 ```
 
-It is not an npm package. Sync copies the release into the consumer's committed `.agentbase/`, and [rulesync](https://github.com/dyoshikawa/rulesync) generates each tool's files from it. Everything is committed, so every clone and cloud agent session sees it without a build step or a token.
+agentbase is the engine: an npm package (`npx agentbase …`) plus reusable GitHub workflows. Your **content repo** holds only your groups and three small workflow files that call agentbase at a pinned version, and Dependabot opens a PR when a new agentbase version is out. Sync copies each release into the consumer's committed `.agentbase/`, and [rulesync](https://github.com/dyoshikawa/rulesync) generates each tool's files from it. Everything is committed, so every clone and cloud agent session sees it without a build step or a token.
 
 ## Why agentbase over plain rulesync
 
@@ -38,7 +38,7 @@ rulesync does the conversion: agentbase uses it to write each agent's files. Wha
 | Ship a new version to every repo | Someone bumps `ref` in each repo by hand | A release opens a PR in every consumer repo, found by topic |
 | Versions and changelog | None | Computed from conventional commits |
 | Different content per repo | Each repo lists the source paths it wants by hand; a path that doesn't exist fails the install | Groups: org-wide, per platform, per repo (a group named after a repo attaches to it on its own) |
-| Change a repo's selection later | Edit its config by hand | `npm run setup` → reconfigure opens a PR |
+| Change a repo's selection later | Edit its config by hand | `npx agentbase setup` → reconfigure opens a PR |
 | Regenerate in CI without network or a token | `install` fetches at CI time; a private source needs a token in every repo | Content is committed in `.agentbase/`; consumer CI needs neither |
 | Catch hand edits and files that never got committed | `install --frozen` checks the lockfile | CI regenerates and fails on edits, uncommitted output and `.gitignore` rules that hide it |
 | Review what runs on developers' machines | No checks | Lint flags hooks, `allowed-tools`, `` !`command` `` lines and frontmatter hooks |
@@ -50,17 +50,26 @@ If you only share skills across a handful of repos and don't mind bumping a ref 
 
 You need: `gh` (logged in), Node 22+, and admin rights on the org.
 
-### 1. Create your copy
+### 1. Create your content repo
 
 ```bash
-gh repo create <org>/agentbase --template sulhadin/agentbase --private --clone
+gh repo create <org>/ai-config --private --clone
+cd ai-config
+npx agentbase init
 ```
 
-Keep the name **`agentbase`**; the scripts and workflows address `<org>/agentbase`. Private is the safer default: the repo holds your agents' prompts and hooks. Consumers need no token either way.
+Any name works. Private is the safer default: the repo holds your agents' prompts and hooks, and consumers need no token either way. `init` writes:
 
-Then, in `README.md`, replace `sulhadin/agentbase` with `<org>/agentbase` in the first two badge links.
+| File | Purpose |
+|---|---|
+| `groups/common/` | one placeholder skill, subagent and command |
+| `.github/workflows/agentbase-release.yml` | *Actions → release*: calls agentbase's release workflow |
+| `.github/workflows/agentbase-sync.yml` | *Actions → sync consumers*: rolls a tag out again, e.g. to one repo |
+| `.github/workflows/agentbase-check.yml` | lints `groups/` and PR titles |
+| `.github/dependabot.yml` | a PR when a new agentbase version is out |
+| `package.json` | pins the same agentbase version for `npm run setup` |
 
-Nothing in the repo lists consumer repos. Sync finds them at run time as the repos under the copy's owner with the `agentbase-consumer` topic, so a copy never reaches the original owner's repos.
+Nothing in the content repo lists consumer repos. Sync finds them at run time as the repos under the content repo's owner with the `agentbase-consumer` topic.
 
 ### 2. Put your content in
 
@@ -97,7 +106,7 @@ description: REST conventions for this org. Use when adding or changing an HTTP 
 
 `name` must match the folder name; `description` tells the agent when to load it. Subagents, commands and `hooks.json` use [rulesync's formats](https://github.com/dyoshikawa/rulesync). A hook that runs a script refers to it as `.agentbase/scripts/<group>/<file>`, and the file lives in `groups/<group>/scripts/<file>`; CI checks that it exists.
 
-The template ships one placeholder skill, subagent and command in `groups/common/`. Replace them with yours.
+`init` creates one placeholder skill, subagent and command in `groups/common/`. Replace them with yours; `npm run lint` checks the result locally.
 
 ### 3. Create the GitHub App that opens the PRs
 
@@ -105,17 +114,17 @@ The workflows' built-in `GITHUB_TOKEN` can only touch `agentbase` itself; this A
 
 1. **Create it.** Org: *Org settings → Developer settings → GitHub Apps → New GitHub App*. Personal account: *Settings → Developer settings → GitHub Apps → New GitHub App*.
    - **GitHub App name:** anything unique on GitHub, e.g. `<org>-agentbase`. It is the bot's display name and can be renamed later.
-   - **Homepage URL:** required; `https://github.com/<org>/agentbase` is fine.
+   - **Homepage URL:** required; `https://github.com/<org>/ai-config` is fine.
    - **Webhook:** untick *Active*.
    - **Repository permissions:** *Contents* → Read and write, *Pull requests* → Read and write. *Metadata* → Read-only is added automatically.
    - **Where can this GitHub App be installed?** *Only on this account*.
    - Click **Create GitHub App**.
 2. **Copy the App ID.** It is on the App's *General* page under *About*, a number like `1234567`. Not the *Client ID* (`Iv23li…`).
 3. **Generate a private key.** Same page, bottom, *Private keys → Generate a private key*; a `.pem` file downloads.
-4. **Create a `release` environment** in `<org>/agentbase` (*Settings → Environments → New environment*). Under *Deployment branches*, choose *Selected branches* and add your release branch (`main`, or the `RELEASE_BRANCH` below). Then store both values as **environment** secrets and delete the `.pem`:
+4. **Create a `release` environment** in `<org>/ai-config` (*Settings → Environments → New environment*). Under *Deployment branches*, choose *Selected branches* and add your release branch (`main`, or the `RELEASE_BRANCH` below). Then store both values as **environment** secrets and delete the `.pem`:
    ```bash
-   gh secret set AGENTBASE_APP_ID --repo <org>/agentbase --env release --body 1234567
-   gh secret set AGENTBASE_APP_PRIVATE_KEY --repo <org>/agentbase --env release < path/to/the-downloaded.private-key.pem
+   gh secret set AGENTBASE_APP_ID --repo <org>/ai-config --env release --body 1234567
+   gh secret set AGENTBASE_APP_PRIVATE_KEY --repo <org>/ai-config --env release < path/to/the-downloaded.private-key.pem
    ```
    The App can push to agentbase and open PRs everywhere; keeping its key in an environment limited to the release branch stops any other branch from using it.
 5. **Install it.** Creating the App does not install it. On the App's page choose *Install App* in the left menu → *Install* next to your org → pick *All repositories*, or *Only select repositories* including `agentbase` and every repo that will consume it. Skipping this makes every workflow run fail with `Not Found … get-a-user-installation`.
@@ -123,22 +132,22 @@ The workflows' built-in `GITHUB_TOKEN` can only touch `agentbase` itself; this A
 
 ### 4. Cut the first release
 
-Consumers pin a release, so one must exist before step 5. Versions come from [conventional commits](https://www.conventionalcommits.org) on the release branch; the template's `Initial commit` doesn't count.
+Consumers pin a release, so one must exist before step 5. Versions come from [conventional commits](https://www.conventionalcommits.org) on the release branch.
 
 1. **Squash merges must carry the PR title.** In *Settings → General → Pull Requests*, keep *Allow squash merging* on and set its default message to *Pull request title and description* (or *… and commit details*), or:
    ```bash
-   gh api -X PATCH repos/<org>/agentbase -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=PR_BODY
+   gh api -X PATCH repos/<org>/ai-config -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=PR_BODY
    ```
-2. **Optional, start at `0.x`** instead of `v1.0.0`: tag the template's first commit.
+2. **Optional, start at `0.x`** instead of `v1.0.0`: tag the repo's first commit.
    ```bash
    git tag v0.1.0 "$(git rev-list --max-parents=0 HEAD)" && git push origin v0.1.0
    ```
 3. **Commit your step 1–2 changes with a `feat` message** (directly or as a squash-merged PR), e.g. `feat(groups): add initial skills`.
-4. **Release:** *Actions → release → Run workflow*, or `gh workflow run release.yml --repo <org>/agentbase`. When it finishes, *Releases* shows `v0.2.0` (or `v1.0.0`). If the run says *nothing to release*, step 3's commit was not `feat`/`fix`.
+4. **Release:** *Actions → release → Run workflow*, or `gh workflow run release.yml --repo <org>/ai-config`. When it finishes, *Releases* shows `v0.2.0` (or `v1.0.0`). If the run says *nothing to release*, step 3's commit was not `feat`/`fix`.
 
 ### 5. Onboard consumer repos
 
-First give the GitHub App access to them (*Settings → Applications → your App → Configure → Repository access*). Then, from your `agentbase` clone:
+First give the GitHub App access to them (*Settings → Applications → your App → Configure → Repository access*). Then, from your content repo:
 
 ```bash
 npm install
@@ -155,7 +164,7 @@ Pick the repos, the agents and the groups, confirm. Repos that need different gr
 
 Cursor, Copilot and OpenCode also read `.claude/skills/`, so they may list a skill twice; that is harmless.
 
-Non-interactive: `npm run onboard -- web api --targets claudecode,codexcli --groups backend`. Repos are names under the agentbase owner, or `owner/name`.
+Non-interactive: `npx agentbase onboard web api --targets claudecode,codexcli --groups backend`. Repos are names under the content repo's owner, or `owner/name`.
 
 For each repo it clones, runs [`adopt.sh`](scripts/adopt.sh) on a `chore/adopt-agentbase` branch and opens a PR. Repos already adopted, or with an open adoption PR, are skipped. The PR adds:
 
@@ -171,7 +180,7 @@ If the repo already had its own skills, subagents or commands, `adopt.sh` import
 
 If the repo already has hooks in `.claude/settings.json` and one of its groups ships hooks, adopt stops: generation would replace them. Move them into the agentbase group named after the repo, then re-run.
 
-To adopt by hand instead, run `bash <(curl -fsSL https://raw.githubusercontent.com/<org>/agentbase/main/scripts/adopt.sh) <org>` from the repo root.
+To adopt by hand instead, run `npx agentbase adopt <org>/ai-config` from the consumer repo's root.
 
 > [!WARNING]
 > If a consumer's `.gitignore` ignores a generated folder, that agent's files are never committed. Adopt and the consumer check both fail on it and list the hidden files. A bare `.claude` line is the usual culprit; replace it with:
@@ -186,7 +195,7 @@ To adopt by hand instead, run `bash <(curl -fsSL https://raw.githubusercontent.c
 **Check it works.** After merging the adoption PRs, roll the latest release out by hand:
 
 ```bash
-gh workflow run sync.yml --repo <org>/agentbase --ref <release branch> -f ref=$(gh release view --repo <org>/agentbase --json tagName -q .tagName)
+gh workflow run agentbase-sync.yml --repo <org>/ai-config --ref <release branch> -f ref=$(gh release view --repo <org>/ai-config --json tagName -q .tagName)
 ```
 
 The *sync consumers* run should list your repos under `rollout`. A repo whose adoption PR is not merged yet is skipped with a notice, and one that is already on that release gets no PR.
@@ -204,19 +213,19 @@ That's it. From now on, every release opens a PR in every consumer repo it chang
 | `feat!: ...` or `BREAKING CHANGE:` in the body | major |
 | `docs:`, `chore:`, `refactor:`, `ci:`, ... | none |
 
-[`pr-title.yml`](.github/workflows/pr-title.yml) rejects anything else. Changing what an agent is told or runs is `feat` or `fix`, not `docs`.
+The check workflow rejects anything else. Changing what an agent is told or runs is `feat` or `fix`, not `docs`.
 
 **Release:** *Actions → release → Run workflow* (or `gh workflow run release`).
 
 | Step | What happens |
 |---|---|
-| [`release.yml`](.github/workflows/release.yml) | next version from the commits since the last tag; updates `CHANGELOG.md`, tags, publishes the GitHub release. No-op if nothing releasable. |
-| [`sync.yml`](.github/workflows/sync.yml) | in every repo with topic `agentbase-consumer`: copies its groups at the new tag into `.agentbase/`, regenerates, and opens or updates PR `chore/agentbase-sync` if anything changed, listing what. |
-| consumer CI | [`agentbase-check.yml`](templates/consumer-ci.yml) regenerates and fails on drift |
+| release ([`release.yml`](.github/workflows/release.yml)) | next version from the commits since the last tag; updates `CHANGELOG.md`, tags, publishes the GitHub release. No-op if nothing releasable. |
+| sync ([`sync.yml`](.github/workflows/sync.yml)) | in every repo with topic `agentbase-consumer`: copies its groups at the new tag into `.agentbase/`, regenerates, and opens or updates PR `chore/agentbase-sync` if anything changed, listing what. |
+| consumer CI | [`agentbase-check.yml`](templates/consumer/consumer-ci.yml) regenerates and fails on drift |
 
-**Release from another branch:** set the Actions variable `RELEASE_BRANCH` (*Settings → Secrets and variables → Actions → Variables*) to release that branch instead of `main`, e.g. to keep `main` as a clean template while your own content lives elsewhere. The release workflow then refuses to run from any other branch; point the `release` environment at the same branch.
+**Release from another branch:** set the Actions variable `RELEASE_BRANCH` (*Settings → Secrets and variables → Actions → Variables*) in the content repo to release that branch instead of `main`. The release workflow then refuses to run from any other branch; point the `release` environment at the same branch.
 
-**Change a repo's groups or agents:** `npm run setup` → *Reconfigure an adopted repo*, pick the repo, adjust the prefilled groups and agents. Or non-interactively: `npm run reconfigure -- web --groups backend --targets claudecode,codexcli` (each flag sets the full list; `common` and the repo's own group are always kept). It opens a PR in that repo that keeps its agentbase release and regenerates for the new selection.
+**Change a repo's groups or agents:** `npm run setup` → *Reconfigure an adopted repo*, pick the repo, adjust the prefilled groups and agents. Or non-interactively: `npx agentbase reconfigure web --groups backend --targets claudecode,codexcli` (each flag sets the full list; `common` and the repo's own group are always kept). It opens a PR in that repo that keeps its agentbase release and regenerates for the new selection.
 
 **Roll out to one repo only:** *Actions → sync consumers → Run workflow* on the release branch, set `ref` to a tag (e.g. `v1.2.0`) and `repo` to the repo name (e.g. `web`). Sync refuses to move a repo to an older tag unless you tick `force`.
 
@@ -226,6 +235,12 @@ That's it. From now on, every release opens a PR in every consumer repo it chang
 - Never hand-edit generated files (`.claude/skills/`, `.agents/skills/`, …): CI rejects it and the next sync deletes it. A skill an agent writes there itself belongs in `.rulesync/skills/`.
 - Repo-specific hooks go in the agentbase group named after the repo, not in `.claude/settings.json`, which generation rewrites.
 - `AGENTS.md` / `CLAUDE.md` stay yours; agentbase never touches them.
+
+## Updating agentbase
+
+The content repo pins agentbase twice: the `@vX.Y.Z` in its three workflow files (the engine that runs in Actions) and `agentbase` in `package.json` (the CLI behind `npm run setup`). Dependabot checks weekly and opens a PR for each when a new version is out; merge both. Release notes: [releases](https://github.com/sulhadin/agentbase/releases).
+
+Nothing changes in consumer repos until the content repo's next release, which then runs the new engine.
 
 ## Security
 
@@ -242,3 +257,17 @@ What agentbase ships runs inside every developer's agent in every consumer: hook
 - Don't set `targets` in subagent or command frontmatter; rulesync would then skip them for the other agents.
 - A skill with `disable-model-invocation: true` also needs a `codexcli:` policy section, or Codex may still invoke it; the lint warns about it.
 - A personal account can't approve its own PRs, so "Require review from Code Owners" blocks your own edits in consumers.
+
+## Developing agentbase
+
+This repo is the engine, published to npm as `agentbase`:
+
+| Path | What it is |
+|---|---|
+| `bin/agentbase.mjs` | the CLI |
+| `scripts/` | `init`, `setup`, `onboard`, `reconfigure`, `adopt`, `lint-groups`, and `sync-consumer` (the apply logic sync and adopt share) |
+| `.github/workflows/release.yml`, `sync.yml`, `check.yml` | the reusable workflows content repos call; they check out this repo at their own commit (`job.workflow_sha`), so scripts and workflows are always one version |
+| `release.content.cjs` | semantic-release config for content repos |
+| `templates/content/` | what `init` writes; `templates/consumer/` what `adopt` writes |
+
+`npm test` runs the suite. To release agentbase itself, merge conventional-commit PRs into `main` and run *Actions → publish*: it versions, publishes to npm through [trusted publishing](https://docs.npmjs.com/trusted-publishers) (no npm token), tags and creates the GitHub release that content repos pin.

@@ -1,0 +1,8 @@
+# Releases this repo's groups and rolls them out to every consumer. Run it from the release branch:
+# Actions → release → Run workflow.
+name: release
+on: workflow_dispatch
+jobs:
+  release:
+    uses: __ENGINE__/.github/workflows/release.yml@v__VERSION__
+    secrets: inherit

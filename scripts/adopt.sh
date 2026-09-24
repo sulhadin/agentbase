@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Kept in a variable rather than read back from $0: under `bash <(curl ...)` $0 is an already-drained pipe.
-USAGE='One-time onboarding of a consumer repo. Run from the consumer repo root:
-  bash <(curl -fsSL https://raw.githubusercontent.com/<owner>/agentbase/main/scripts/adopt.sh) <owner> [ref] \
-       [--targets claudecode,codexcli] [--groups backend,web]
-Groups are folders under agentbase'"'"'s groups/: common is always included, and so is the group named
-after this repo when it exists. The choice is recorded in agentbase.json.
-With a local clone of agentbase: AGENTBASE_DIR=../agentbase scripts/adopt.sh <owner> [ref]'
+USAGE='Adopt the current repo as a consumer of a content repo. Run from the consumer repo root:
+  npx agentbase adopt <content owner/repo> [ref] [--targets claudecode,codexcli] [--groups backend,web]
+ref defaults to the content repo'"'"'s latest release. Groups are folders under its groups/: common is
+always included, and so is the group named after this repo when it exists. The choice is recorded in
+agentbase.json.'
 
+ROOT="${AGENTBASE_ROOT:-$(cd "$(dirname "$0")/.." && pwd)/}"
 TARGETS="claudecode,codexcli"
 SKILL_GROUPS=""
 POS=()
@@ -23,20 +22,14 @@ while [ $# -gt 0 ]; do
   esac
 done
 set -- "${POS[@]:-}"
-ORG="${1:?usage: adopt.sh <owner> [ref] [--targets a,b] [--groups a,b]}"
-# main is the clean template, so pinning to it would ship placeholders.
-REF="${2:-$(gh release view --repo "$ORG/agentbase" --json tagName -q .tagName)}"
-[ -n "$REF" ] || { echo "✗ $ORG/agentbase has no release yet; cut one first" >&2; exit 1; }
+SOURCE="${1:?$USAGE}"
+[[ "$SOURCE" == */* ]] || { echo "✗ the content repo is owner/name, got '$SOURCE'" >&2; exit 1; }
+REF="${2:-$(gh release view --repo "$SOURCE" --json tagName -q .tagName)}"
+[ -n "$REF" ] || { echo "✗ $SOURCE has no release yet; cut one first" >&2; exit 1; }
 
 [ -d .git ] || { echo "run from the consumer repo root" >&2; exit 1; }
 REPO_NAME=$(gh repo view --json name -q .name 2>/dev/null || basename "$(git rev-parse --show-toplevel)")
-
-TPL="${AGENTBASE_DIR:-}"
-fetch_file() {
-  if [ -n "$TPL" ]; then cat "$TPL/$1"
-  else curl -fsSL "https://raw.githubusercontent.com/$ORG/agentbase/$REF/$1"
-  fi
-}
+OWNER=$(gh repo view --json owner -q .owner.login 2>/dev/null || echo "${SOURCE%%/*}")
 work=$(mktemp -d)
 json_list() { printf '"%s"' "${1//,/\", \"}"; }
 
@@ -51,19 +44,16 @@ if [ -f rulesync.jsonc ]; then
   echo "▸ keeping the existing rulesync.jsonc"
 else
   echo "▸ writing rulesync.jsonc (targets=$TARGETS)"
-  fetch_file templates/rulesync.jsonc | sed -e "s#__TARGETS__#$(json_list "$TARGETS")#" > "$work/rulesync.jsonc"
+  sed -e "s#__TARGETS__#$(json_list "$TARGETS")#" "${ROOT}templates/consumer/rulesync.jsonc" > "$work/rulesync.jsonc"
   mv "$work/rulesync.jsonc" rulesync.jsonc
 fi
 
-echo "▸ copying agentbase $REF into .agentbase/"
-# The same script sync runs on every release, fetched from the pinned ref so both agree on the layout.
-fetch_file scripts/sync-consumer.mjs > "$work/sync-consumer.mjs"
-# Content always comes from $REF itself, never from a local AGENTBASE_DIR that may be ahead of it.
-node "$work/sync-consumer.mjs" apply "$REF" "$ORG" "$REPO_NAME" --groups "$SKILL_GROUPS"
+echo "▸ copying $SOURCE $REF into .agentbase/"
+node "${ROOT}scripts/sync-consumer.mjs" apply "$REF" "$SOURCE" "$REPO_NAME" --groups "$SKILL_GROUPS"
 
 echo "▸ CI workflow"
 mkdir -p .github/workflows
-[ -f .github/workflows/agentbase-check.yml ] || fetch_file templates/consumer-ci.yml > .github/workflows/agentbase-check.yml
+[ -f .github/workflows/agentbase-check.yml ] || cp "${ROOT}templates/consumer/consumer-ci.yml" .github/workflows/agentbase-check.yml
 
 echo "▸ generating agent files"
 npx --yes rulesync@16 generate --delete
@@ -80,16 +70,16 @@ if [ -n "$ignored" ]; then
 fi
 
 echo "▸ repo topic"
-gh repo edit "$ORG/$REPO_NAME" --add-topic agentbase-consumer 2>/dev/null \
-  || echo "  add the GitHub topic 'agentbase-consumer' manually (gh could not edit $ORG/$REPO_NAME)"
+gh repo edit "$OWNER/$REPO_NAME" --add-topic agentbase-consumer 2>/dev/null \
+  || echo "  add the GitHub topic 'agentbase-consumer' manually (gh could not edit $OWNER/$REPO_NAME)"
 
 cat <<MSG
 
 Done. Review and commit everything, generated files included:
-  - agentbase.json          ← this repo's groups; change them here
-  - .agentbase/             ← agentbase's content at $REF; never edit by hand
+  - agentbase.json          ← the content repo, its release and this repo's groups
+  - .agentbase/             ← $SOURCE at $REF; never edit by hand
   - rulesync.jsonc, .github/workflows/agentbase-check.yml, generated agent folders
-  - .rulesync/              ← this repo's own skills; delete any that agentbase now ships
+  - .rulesync/              ← this repo's own skills; delete any that $SOURCE now ships
 Append to CODEOWNERS (use a team, e.g. @org/platform, for an organization):
 MSG
-fetch_file templates/codeowners-snippet | sed "s#__ORG__#$ORG#g"
+sed "s#__ORG__#${SOURCE%%/*}#g" "${ROOT}templates/consumer/codeowners-snippet"

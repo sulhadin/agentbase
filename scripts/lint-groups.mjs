@@ -108,7 +108,7 @@ export function lintGroups(root) {
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
-  const { errors, warnings } = lintGroups(process.cwd());
+  const { errors, warnings } = lintGroups(process.argv[2] ?? process.cwd());
   for (const w of warnings) console.log(`::warning::${w}`);
   for (const e of errors) console.log(`::error::${e}`);
   console.log(`${errors.length} error(s), ${warnings.length} warning(s)`);
