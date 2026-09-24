@@ -126,10 +126,21 @@ export function updateRulesyncConfig(text, { source, features, targets }) {
     } else {
       const close = lines.findIndex((l, i) => i > open && /^\s*\]/.test(l));
       if (close < 0) throw new Error('rulesync.jsonc "sources" is not closed on its own line');
-      const body = lines.slice(open + 1, close).filter((l) => !ours.test(l));
+      // The old sync workflow's marker comment goes with the entries it described.
+      const legacyLine = (l) => ours.test(l) || /^\s*\/\/.*agentbase/i.test(l);
+      const original = lines.slice(open + 1, close);
+      const body = original.filter((l) => !legacyLine(l));
       const entries = body.map((l, i) => (/^\s*\{/.test(l) ? i : -1)).filter((i) => i >= 0);
-      const fixed = body.map((l, i) => (entries.includes(i) ? l.replace(/\s*,?\s*$/, i === entries.at(-1) ? '' : ',') : l));
-      lines = [...lines.slice(0, open + 1), ...fixed, ...lines.slice(close)];
+      if (!entries.length && body.length < original.length) {
+        // An empty "sources" left behind would only confuse readers, so the key goes too.
+        const lastProp = !/,\s*$/.test(lines[close]);
+        lines.splice(open, close - open + 1);
+        const prev = lines.slice(0, open).findLastIndex((l) => /\S/.test(l) && !/^\s*\/\//.test(l));
+        if (lastProp && prev >= 0) lines[prev] = lines[prev].replace(/,\s*$/, '');
+      } else {
+        const fixed = body.map((l, i) => (entries.includes(i) ? l.replace(/\s*,?\s*$/, i === entries.at(-1) ? '' : ',') : l));
+        lines = [...lines.slice(0, open + 1), ...fixed, ...lines.slice(close)];
+      }
     }
   }
 

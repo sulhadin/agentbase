@@ -132,6 +132,27 @@ test('updateRulesyncConfig drops agentbase sources, keeps others valid and adds 
   assert.equal(updateRulesyncConfig(once, { source: 'acme/agentbase', features: ['skills', 'subagents'] }), once);
 });
 
+test('updateRulesyncConfig removes "sources" once only the legacy entry and its comment were in it', () => {
+  const text = `{
+  "targets": ["claudecode"],
+  "features": ["skills"],
+  "inputRoots": [".agentspread", ".rulesync"],
+  "sources": [
+    // Bumped automatically by agentbase's sync workflow. Do not edit by hand.
+    { "source": "acme/agentbase", "ref": "v0.3.0" }
+  ]
+}
+`;
+  const once = updateRulesyncConfig(text, { source: 'acme/agentspread-config', features: ['skills'] });
+  assert.equal(once.includes('sources'), false);
+  assert.equal(once.includes('agentbase'), false);
+  assert.deepEqual(jsonc(once).inputRoots, ['.agentspread', '.rulesync']);
+  assert.equal(updateRulesyncConfig(once, { source: 'acme/agentspread-config', features: ['skills'] }), once);
+
+  const own = '{\n  "features": ["skills"],\n  "sources": []\n}\n';
+  assert.match(updateRulesyncConfig(own, { source: 'acme/agentspread-config', features: ['skills'] }), /"sources": \[\]/);
+});
+
 test('updateRulesyncConfig handles a config without sources and refuses inline agentbase sources', () => {
   const plain = '{\n  "targets": ["claudecode"],\n  "features": ["skills"]\n}\n';
   assert.deepEqual(jsonc(updateRulesyncConfig(plain, { source: 'acme/agentbase', features: ['skills'] })).inputRoots, ['.agentspread', '.rulesync']);
