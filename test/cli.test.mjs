@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
@@ -62,4 +62,19 @@ test('group refuses a taken or malformed name and an unknown part', () => {
   assert.match(inDir('common').stderr, /groups\/common already exists/);
   assert.match(inDir('Web_UI').stderr, /lowercase letters/);
   assert.match(inDir('web', '--parts', 'hooks').stderr, /unknown part: hooks/);
+});
+
+test('group reads its arguments strictly', () => {
+  const dir = contentRepo();
+  const inDir = (...args) => spawnSync('node', [CLI, 'group', ...args], { cwd: dir, encoding: 'utf8' });
+  for (const args of [['web', '--parts'], ['web', '--parts', ','], ['web', '--parts=']]) {
+    assert.match(inDir(...args).stderr, /--parts needs at least one/, args.join(' '));
+  }
+  assert.match(inDir('web', '--part', 'skills').stderr, /unknown option --part/);
+  assert.match(inDir('web', '--parts', 'skills', '--parts', 'commands').stderr, /give --parts once/);
+  assert.match(inDir('web', 'extra').stderr, /one group at a time/);
+  assert.equal(existsSync(join(dir, 'groups/web')), false, 'nothing is written on a bad call');
+
+  assert.equal(inDir('--parts=instructions,commands', 'web').status, 0);
+  assert.deepEqual(readdirSync(join(dir, 'groups/web')).sort(), ['AGENTS.md', 'commands']);
 });

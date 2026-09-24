@@ -22,6 +22,28 @@ if (args.includes('--help') || args.includes('-h')) {
   console.log(USAGE);
   process.exit(0);
 }
+const fail = (message) => {
+  console.error(`✗ ${message}`);
+  process.exit(1);
+};
+
+let name;
+let parts = null;
+for (let i = 0; i < args.length; i++) {
+  const arg = args[i];
+  if (arg === '--parts' || arg.startsWith('--parts=')) {
+    if (parts) fail('give --parts once, as a comma-separated list');
+    const value = arg === '--parts' ? args[++i] : arg.slice('--parts='.length);
+    parts = (value ?? '').split(',').map((p) => p.trim()).filter(Boolean);
+    if (!parts.length) fail(`--parts needs at least one of ${Object.keys(PARTS).join(', ')}`);
+  } else if (arg.startsWith('-')) {
+    fail(`unknown option ${arg}\n\n${USAGE}`);
+  } else if (name) {
+    fail(`one group at a time; got ${name} and ${arg}`);
+  } else {
+    name = arg;
+  }
+}
 if (!existsSync('groups')) {
   console.error('✗ run this in the content repo (the one with groups/)');
   process.exit(1);
@@ -51,16 +73,11 @@ const consumerRepos = () => {
   }
 };
 
-let name = args.find((a) => !a.startsWith('--') && args[args.indexOf(a) - 1] !== '--parts');
-let parts = args.includes('--parts') ? (args[args.indexOf('--parts') + 1] ?? '').split(',').filter(Boolean) : null;
 let forRepo = false;
 
 if (name) {
   const problem = invalidName(name);
-  if (problem) {
-    console.error(`✗ ${problem}`);
-    process.exit(1);
-  }
+  if (problem) fail(problem);
   forRepo = consumerRepos().includes(name);
 } else {
   const repos = consumerRepos();
@@ -73,8 +90,14 @@ if (name) {
   }));
   forRepo = kind === 'repo';
   const available = repos.filter((r) => !existsSync(join('groups', r)));
-  if (forRepo && available.length) {
-    name = await ask(select({ message: 'Which repo?', pageSize: 15, choices: available.map((r) => ({ name: r, value: r })) }));
+  if (forRepo && available.some((r) => KEBAB.test(r))) {
+    name = await ask(select({
+      message: 'Which repo?',
+      pageSize: 15,
+      // A repo-named group must match the repo exactly, and group names are lowercase kebab-case.
+      choices: [...available.filter((r) => KEBAB.test(r)), ...available.filter((r) => !KEBAB.test(r))]
+        .map((r) => ({ name: r, value: r, disabled: !KEBAB.test(r) && '(not lowercase kebab-case, so no group of its own)' })),
+    }));
   } else {
     name = await ask(input({
       message: forRepo ? 'Repo name' : 'Group name',
@@ -96,11 +119,8 @@ if (!parts) {
     choices: Object.entries(PARTS).map(([value, label]) => ({ name: label, value, checked: value === 'skills' })),
   }));
 }
-const unknown = parts.filter((p) => !PARTS[p]);
-if (unknown.length) {
-  console.error(`✗ unknown part: ${unknown.join(', ')} (choose from ${Object.keys(PARTS).join(', ')})`);
-  process.exit(1);
-}
+const unknown = parts.filter((p) => !Object.hasOwn(PARTS, p));
+if (unknown.length) fail(`unknown part: ${unknown.join(', ')} (choose from ${Object.keys(PARTS).join(', ')})`);
 
 const example = `${name}-example`;
 const files = {
