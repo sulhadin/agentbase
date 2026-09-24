@@ -47,6 +47,6 @@ To adopt a single repo by hand, run `npx agentspread adopt <org>/agentspread-con
 
 - `.agentspread/` and the generated folders are agentspread's; never hand-edit them. The check rejects edits to generated files, and the next sync overwrites `.agentspread/`.
 - `.rulesync/` is the repo's own and wins on a name clash, so a local skill overrides a shared one with the same name. A skill an agent writes for this repo belongs there.
-- `AGENTS.md` and `CLAUDE.md` stay yours except for the section between the `agentspread:start` and `agentspread:end` markers. Write your own notes above or below it; the check fails if the section itself is edited or a marker is removed.
+- `AGENTS.md` and `CLAUDE.md` stay yours except for the section between the `agentspread:start` and `agentspread:end` markers. Write your own notes above or below it. The check fails if the section is edited, a marker is removed, or a `CLAUDE.md` is added or changed so the section belongs somewhere else; run `npx agentspread instructions` in the repo to rewrite it from `.agentspread/`.
 - Don't run `rulesync gitignore`; it would ignore the files that are committed on purpose.
 - To change the repo's groups or agents, run `npm run reconfigure` in the content repo (see [the README](../README.md#change-a-repos-groups-or-agents)). Editing `groups` in `agentspread.json` by hand also works; the next release applies it.

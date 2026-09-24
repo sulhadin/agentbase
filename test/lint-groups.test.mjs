@@ -79,5 +79,5 @@ test('a group may carry AGENTS.md, but not the section markers', () => {
   const ok = { 'groups/common/skills/a/SKILL.md': skill('a'), 'groups/common/AGENTS.md': 'Be kind.\n' };
   assert.deepEqual(errorsOf(ok), []);
   const bad = { ...ok, 'groups/common/AGENTS.md': '<!-- agentspread:end -->\n' };
-  assert.match(errorsOf(bad).join(), /must not contain agentspread:start\/end/);
+  assert.match(errorsOf(bad).join(), /must not start a line with an agentspread:start\/end marker/);
 });

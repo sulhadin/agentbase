@@ -126,13 +126,14 @@ test('updateRulesyncConfig sets targets and features, adds inputRoots and keeps 
 
 test('summarize groups the vendored changes by kind', () => {
   const nameStatus = [
+    'M\t.agentspread/instructions.md',
     'A\t.agentspread/skills/new-one/SKILL.md',
     'M\t.agentspread/skills/api/SKILL.md',
     'A\t.agentspread/skills/api/extra.md',
     'D\t.agentspread/subagents/old.md',
     'M\t.agentspread/hooks.json',
   ].join('\n');
-  assert.equal(summarize(nameStatus), 'skills: api, new-one (new); subagents: old (removed); hooks: hooks.json');
+  assert.equal(summarize(nameStatus), 'instructions: AGENTS.md section; skills: api, new-one (new); subagents: old (removed); hooks: hooks.json');
   assert.equal(summarize(''), 'none');
 });
 
@@ -199,6 +200,8 @@ test('writeManagedBlock adds, replaces and removes only its own section', () => 
   assert.equal(writeManagedBlock(own, null), own);
   assert.throws(() => writeManagedBlock(`${own}<!-- agentspread:start -->\nleft open\n`, 'x'), /broken agentspread markers/);
   assert.throws(() => writeManagedBlock(`${block('a')}\n${block('b')}\n`, 'x'), /broken agentspread markers/);
+  const mention = 'Do not edit the `<!-- agentspread:start -->` section.\n';
+  assert.equal(writeManagedBlock(mention, 'x'), `${mention}\n${block('x')}\n`);
 });
 
 const instructionsFixture = () =>
@@ -257,6 +260,13 @@ test('apply creates AGENTS.md for shared instructions and removes it once they a
   rmSync(join(src, 'groups/common/AGENTS.md'));
   assert.equal(apply(repo, 'v1.0.0', CONTENT, 'x', '--from', src).status, 0);
   assert.equal(existsSync(join(repo, 'AGENTS.md')), false);
+});
+
+test('apply refuses a group AGENTS.md that contains the section markers', () => {
+  const src = instructionsFixture();
+  writeFileSync(join(src, 'groups/web/AGENTS.md'), '<!-- agentspread:end -->\n');
+  const run = apply(consumer(), 'v1.0.0', CONTENT, 'web', '--from', src);
+  assert.match(run.stderr, /groups\/web\/AGENTS\.md must not contain/);
 });
 
 test('apply refuses shared instructions when rulesync rules would overwrite them', () => {

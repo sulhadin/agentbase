@@ -50,7 +50,7 @@ Instructions from the groups' AGENTS.md files
 
 Only the lines between the markers are agentspread's. If the repo has no `AGENTS.md`, it is created; if it has one without the markers, the section is added at the end. If the groups stop shipping instructions, the section is removed, and so is an `AGENTS.md` that held nothing else.
 
-Claude Code reads `AGENTS.md` only when a repo has no `CLAUDE.md`. So if the repo has its own `CLAUDE.md`, the same section goes there too. `CLAUDE.md` is never created, and it is left alone when it is a symlink to `AGENTS.md` or imports it with an `@AGENTS.md` line, since Claude then reads the section already.
+Claude Code reads `AGENTS.md` only when a repo has no `CLAUDE.md`. So if the repo has its own `CLAUDE.md`, the same section goes there too. `CLAUDE.md` is never created, and it is left alone when it is a symlink to `AGENTS.md` or imports it (`@AGENTS.md` anywhere in the file), since Claude then reads the section already.
 
 ## Subagents, commands and hooks
 

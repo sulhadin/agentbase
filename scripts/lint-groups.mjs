@@ -78,8 +78,8 @@ export function lintGroups(root) {
     }
 
     const instructions = join(root, dir, 'AGENTS.md');
-    if (existsSync(instructions) && /agentspread:(start|end)/.test(readFileSync(instructions, 'utf8'))) {
-      errors.push(`${dir}/AGENTS.md: must not contain agentspread:start/end, which mark the section it is copied into`);
+    if (existsSync(instructions) && /^<!-- agentspread:(start|end)/m.test(readFileSync(instructions, 'utf8'))) {
+      errors.push(`${dir}/AGENTS.md: must not start a line with an agentspread:start/end marker, which mark the section it is copied into`);
     }
 
     const hooksFile = join(root, dir, 'hooks.json');

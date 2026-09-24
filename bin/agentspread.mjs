@@ -15,6 +15,7 @@ const COMMANDS = {
   reconfigure: ['bash', 'scripts/reconfigure.sh', "change a consumer's groups or agents; asks when called without a repo (run in the content repo)"],
   adopt: ['bash', 'scripts/adopt.sh', 'adopt the current repo as a consumer of a content repo'],
   lint: ['node', 'scripts/lint-groups.mjs', 'check groups/ in a content repo'],
+  instructions: ['node', 'scripts/sync-consumer.mjs', "rewrite agentspread's section in AGENTS.md and CLAUDE.md from .agentspread/ (run in a consumer repo)"],
 };
 // Kept for content repos whose package.json still runs `agentspread setup`: a menu of onboard and reconfigure.
 const ALIASES = { setup: ['node', INTERACTIVE] };
@@ -24,7 +25,7 @@ if (command === '--version' || command === '-v') {
   console.log(version);
 } else if (!Object.hasOwn(COMMANDS, command ?? '') && !Object.hasOwn(ALIASES, command ?? '')) {
   console.log(`agentspread ${version}\n\nUsage: npx agentspread <command>\n`);
-  for (const [name, [, , about]] of Object.entries(COMMANDS)) console.log(`  ${name.padEnd(12)} ${about}`);
+  for (const [name, [, , about]] of Object.entries(COMMANDS)) console.log(`  ${name.padEnd(13)} ${about}`);
   process.exit(command && command !== '--help' && command !== '-h' ? 1 : 0);
 } else {
   const interactive = !args.length && (command === 'onboard' || command === 'reconfigure');

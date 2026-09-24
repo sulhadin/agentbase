@@ -31,16 +31,17 @@ jobs:
           node -e '
             const fs = require("fs");
             const read = (f) => (fs.existsSync(f) ? fs.readFileSync(f, "utf8") : null);
-            const sectionOf = (f) => read(f)?.match(/<!-- agentspread:start[^>]*-->\r?\n([\s\S]*?)\r?\n<!-- agentspread:end -->/)?.[1].trim() ?? null;
+            const sectionOf = (f) => read(f)?.match(/^<!-- agentspread:start[^>\n]*-->\r?\n([\s\S]*?)\r?\n<!-- agentspread:end -->/m)?.[1].trim() ?? null;
             const shared = read(".agentspread/instructions.md")?.trim() ?? null;
-            const same = fs.existsSync("CLAUDE.md") && fs.existsSync("AGENTS.md") && fs.realpathSync("CLAUDE.md") === fs.realpathSync("AGENTS.md");
-            const claudeWants = fs.existsSync("CLAUDE.md") && !same && !/^\s*@(\.\/)?AGENTS\.md\s*$/m.test(read("CLAUDE.md"));
-            const expected = { "AGENTS.md": shared, ...(same ? {} : { "CLAUDE.md": claudeWants ? shared : null }) };
+            const hasClaude = fs.existsSync("CLAUDE.md") && fs.statSync("CLAUDE.md").isFile();
+            const same = hasClaude && fs.existsSync("AGENTS.md") && fs.realpathSync("CLAUDE.md") === fs.realpathSync("AGENTS.md");
+            const claudeWants = hasClaude && !same && !/(^|\s)@(\.\/)?AGENTS\.md(?=\s|$)/m.test(read("CLAUDE.md"));
+            const expected = { "AGENTS.md": shared, ...(hasClaude && !same ? { "CLAUDE.md": claudeWants ? shared : null } : {}) };
             let failed = false;
             for (const [file, want] of Object.entries(expected)) {
               const section = sectionOf(file);
               if (section === want) continue;
-              console.log(`::error::${file}: the agentspread section is ${section === null ? "missing" : want === null ? "not expected here" : "out of date or hand-edited"}. The next sync rewrites it; to change it, edit the content repo.`);
+              console.log(`::error::${file}: the agentspread section is ${section === null ? "missing" : want === null ? "not expected here" : "out of date or hand-edited"}. Run npx agentspread instructions to rewrite it; to change the instructions themselves, edit the content repo.`);
               failed = true;
             }
             process.exit(failed ? 1 : 0);

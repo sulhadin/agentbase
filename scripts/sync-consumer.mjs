@@ -7,7 +7,7 @@
 // from it plus the repo's own .rulesync/, so nothing is fetched at generate time and cloud agents see it all.
 import { execFileSync } from 'node:child_process';
 import {
-  cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync,
+  cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -20,7 +20,10 @@ export const INPUT_ROOTS = [VENDOR_DIR, '.rulesync'];
 export const INSTRUCTIONS_FILE = 'instructions.md';
 const BLOCK_START = '<!-- agentspread:start (managed by agentspread; edits inside are overwritten on the next sync) -->';
 const BLOCK_END = '<!-- agentspread:end -->';
-const BLOCK = /<!-- agentspread:start[^>]*-->[\s\S]*?<!-- agentspread:end -->/;
+// Markers count only at the start of a line, so a file can still mention them in prose or code spans.
+const BLOCK = /^<!-- agentspread:start[^>\n]*-->[\s\S]*?^<!-- agentspread:end -->/m;
+// Claude Code follows an @AGENTS.md import anywhere in CLAUDE.md, not just on a line of its own.
+const IMPORTS_AGENTS = /(^|\s)@(\.\/)?AGENTS\.md(?=\s|$)/m;
 const PARTS = ['skills', 'subagents', 'commands', 'hooks'];
 const unique = (xs) => [...new Set(xs)];
 const listDir = (dir) => (existsSync(dir) ? readdirSync(dir, { withFileTypes: true }) : []);
@@ -104,9 +107,12 @@ export function vendorGroups(agentspreadDir, groups, vendorDir) {
     writeFileSync(join(vendorDir, 'hooks.json'), `${JSON.stringify(mergeHooks(hookFiles), null, 2)}\n`);
   }
   const instructions = groups
-    .map((group) => join(agentspreadDir, 'groups', group, 'AGENTS.md'))
-    .filter((file) => existsSync(file))
-    .map((file) => readFileSync(file, 'utf8').trim())
+    .filter((group) => existsSync(join(agentspreadDir, 'groups', group, 'AGENTS.md')))
+    .map((group) => {
+      const text = readFileSync(join(agentspreadDir, 'groups', group, 'AGENTS.md'), 'utf8').trim();
+      if (/^<!-- agentspread:(start|end)/m.test(text)) throw new Error(`groups/${group}/AGENTS.md must not contain agentspread's section markers`);
+      return text;
+    })
     .filter(Boolean);
   if (instructions.length) {
     mkdirSync(vendorDir, { recursive: true });
@@ -116,8 +122,8 @@ export function vendorGroups(agentspreadDir, groups, vendorDir) {
 
 // Replaces, adds or (with no content) removes agentspread's section, leaving the rest of the file as it was.
 export function writeManagedBlock(text, content, file = 'the file') {
-  const starts = text.match(/<!-- agentspread:start/g)?.length ?? 0;
-  const ends = text.match(/<!-- agentspread:end -->/g)?.length ?? 0;
+  const starts = text.match(/^<!-- agentspread:start/gm)?.length ?? 0;
+  const ends = text.match(/^<!-- agentspread:end -->/gm)?.length ?? 0;
   // A stray marker would make the next match run across the repo's own text and overwrite it.
   if (starts > 1 || ends > 1 || starts !== ends || (starts && !BLOCK.test(text))) {
     throw new Error(`${file} has broken agentspread markers; keep exactly one agentspread:start line followed by one agentspread:end line, or remove both`);
@@ -137,17 +143,18 @@ export function writeManagedBlock(text, content, file = 'the file') {
 export function syncInstructions() {
   const source = join(VENDOR_DIR, INSTRUCTIONS_FILE);
   const content = existsSync(source) ? readFileSync(source, 'utf8') : null;
+  const hasClaude = existsSync('CLAUDE.md') && statSync('CLAUDE.md').isFile();
+  const linked = hasClaude && existsSync('AGENTS.md') && realpathSync('CLAUDE.md') === realpathSync('AGENTS.md');
   const agents = existsSync('AGENTS.md') ? readFileSync('AGENTS.md', 'utf8') : '';
   const nextAgents = writeManagedBlock(agents, content, 'AGENTS.md');
   if (nextAgents !== agents) {
-    if (nextAgents) writeFileSync('AGENTS.md', nextAgents);
+    // Emptied rather than deleted when CLAUDE.md links to it, so the link doesn't dangle.
+    if (nextAgents || linked) writeFileSync('AGENTS.md', nextAgents);
     else rmSync('AGENTS.md');
   }
-  if (!existsSync('CLAUDE.md')) return;
-  if (existsSync('AGENTS.md') && realpathSync('CLAUDE.md') === realpathSync('AGENTS.md')) return;
+  if (!hasClaude || linked) return;
   const claude = readFileSync('CLAUDE.md', 'utf8');
-  const imports = /^\s*@(\.\/)?AGENTS\.md\s*$/m.test(claude);
-  const nextClaude = writeManagedBlock(claude, imports ? null : content, 'CLAUDE.md');
+  const nextClaude = writeManagedBlock(claude, IMPORTS_AGENTS.test(claude) ? null : content, 'CLAUDE.md');
   if (nextClaude !== claude) writeFileSync('CLAUDE.md', nextClaude);
 }
 
@@ -297,11 +304,14 @@ function main([command, ...args]) {
       if (!ref || !source || !repo) throw new Error('usage: apply <ref> <content owner/repo> <consumer repo> [--groups a,b | --set-groups a,b] [--targets a,b] [--from dir] [--force]');
       if (opts.targets?.length === 0) throw new Error('--targets needs at least one agent');
       apply(ref, source, repo, opts);
+    } else if (command === 'instructions') {
+      if (!existsSync(VENDOR_DIR)) throw new Error('run from a consumer root with .agentspread/');
+      syncInstructions();
     } else if (command === 'summary') {
       execFileSync('git', ['add', '--all', '--intent-to-add', VENDOR_DIR]);
       console.log(summarize(execFileSync('git', ['diff', '--name-status', '--', VENDOR_DIR], { encoding: 'utf8' })));
     } else {
-      throw new Error('usage: sync-consumer.mjs apply <ref> <content owner/repo> <consumer repo> [...] | summary');
+      throw new Error('usage: sync-consumer.mjs apply <ref> <content owner/repo> <consumer repo> [...] | instructions | summary');
     }
   } catch (err) {
     console.error(`✗ ${err.message}`);
