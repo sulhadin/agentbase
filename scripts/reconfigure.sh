@@ -38,9 +38,7 @@ cd "$dir"
 git switch -q -c "$BRANCH"
 
 ref=$(node -e 'console.log(require("./agentspread.json").ref)')
-# Consumers adopted before agentspread.json recorded a source get this content repo, as sync would give them.
-source=$(node -e 'console.log(require("./agentspread.json").source ?? "")')
-source="${source:-$SOURCE}"
+source=$(node -e 'console.log(require("./agentspread.json").source)')
 before=$(describe)
 node "${ROOT}scripts/sync-consumer.mjs" apply "$ref" "$source" "${REPO#*/}" "${APPLY_FLAGS[@]}"
 npx --yes rulesync@16 generate --delete

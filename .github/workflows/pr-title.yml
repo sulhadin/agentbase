@@ -1,4 +1,4 @@
-# The squash commit takes the PR title, and the release workflow versions from those commits.
+# The squash commit takes the PR title, and the publish workflow versions from those commits.
 name: pr title
 on:
   pull_request:
@@ -11,6 +11,6 @@ jobs:
         run: |
           re='^(feat|fix|perf|revert|refactor|docs|chore|ci|build|test|style)(\([^)]+\))?!?: .+'
           [[ "$TITLE" =~ $re ]] || {
-            echo "::error::PR title must be a conventional commit, e.g. 'feat(skills): add api-design'"
+            echo "::error::PR title must be a conventional commit, e.g. 'feat(sync): skip archived consumers'"
             exit 1
           }

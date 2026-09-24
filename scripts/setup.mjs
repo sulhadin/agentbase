@@ -3,6 +3,11 @@ import { fileURLToPath } from 'node:url';
 import { checkbox, confirm, select } from '@inquirer/prompts';
 import { fetchTree } from './sync-consumer.mjs';
 
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  console.log('Usage: npx agentspread setup\n\nRun in the content repo: onboard consumer repos or reconfigure an adopted one, interactively.');
+  process.exit(0);
+}
+
 // Cursor, Copilot and OpenCode read .agents/skills too, so a copy in their own folder would only
 // make every skill appear twice.
 const AGENTS = [
@@ -105,14 +110,14 @@ if (mode === 'reconfigure') {
   const { ref, groups: currentGroups, source: consumerSource } = JSON.parse(membership);
   const currentTargets = JSON.parse(readFile(repo, 'rulesync.jsonc').match(/"targets":\s*(\[[^\]]*\])/)?.[1] ?? '[]');
   // Groups as of the repo's own release: reconfiguring keeps that release rather than upgrading it.
-  const { groups } = fetchTree(consumerSource ?? source, ref);
+  const { groups } = fetchTree(consumerSource, ref);
 
   const selectedAgents = await pickAgents(currentTargets);
   const selectedGroups = await pickGroups(groups, { current: currentGroups, autoFor: [repo] });
   const targets = [...new Set(selectedAgents.map((a) => a.target))];
 
   console.log(`
-  Repo:    ${repo} (stays on ${consumerSource ?? source} ${ref})
+  Repo:    ${repo} (stays on ${consumerSource} ${ref})
   Groups:  ${currentGroups.join(', ')} → ${['common', ...selectedGroups, ...(groups.includes(repo) ? [repo] : [])].join(', ')}
   Agents:  ${currentTargets.join(', ')} → ${targets.join(', ')}
   Opens or updates a PR on chore/agentspread-reconfigure.
@@ -137,7 +142,7 @@ if (mode === 'reconfigure') {
   const release = gh('release', 'view', '--json', 'tagName', '-q', '.tagName');
   const { groups } = fetchTree(source, release);
   if (!groups.includes('common')) {
-    console.error(`${source} ${release} has no groups/common/; release the grouped layout before onboarding.`);
+    console.error(`${source} ${release} has no groups/common/; add it and cut a release before onboarding.`);
     process.exit(1);
   }
   const selectedGroups = await pickGroups(groups, { autoFor: selectedRepos });

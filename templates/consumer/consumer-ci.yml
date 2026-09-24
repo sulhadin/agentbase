@@ -21,7 +21,7 @@ jobs:
           # --intent-to-add makes generated files that were never committed show up in the diff.
           git add --all --intent-to-add .
           git diff --exit-code || {
-            echo "::error::Generated agent files are out of date or were hand-edited. Run: npx rulesync generate --delete"
+            echo "::error::Generated agent files are out of date or were hand-edited. Run: npx rulesync@16 generate --delete"
             exit 1
           }
       - name: Fail if .gitignore hides generated files

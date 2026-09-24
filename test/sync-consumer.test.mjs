@@ -54,6 +54,14 @@ const legacyConsumer = () =>
     },
   });
 
+const CONTENT = 'acme/agentspread-config';
+
+const consumer = (membership = { source: CONTENT, ref: 'v0.3.0', groups: ['common'] }) =>
+  write(tmp(), {
+    'rulesync.jsonc': '{\n  "targets": ["claudecode"],\n  "features": ["skills"]\n}\n',
+    'agentspread.json': membership,
+  });
+
 const apply = (cwd, ...args) =>
   spawnSync('node', [SCRIPT, 'apply', ...args], { cwd, encoding: 'utf8' });
 
@@ -181,20 +189,25 @@ test('apply removes the lockfile and fetched copies once no source is left', () 
 });
 
 test('apply refuses a downgrade unless forced', () => {
-  const consumer = legacyConsumer();
+  const repo = consumer();
   const src = agentspreadFixture();
-  const run = apply(consumer, 'v0.2.0', 'acme/agentbase', 'x', '--from', src);
+  const run = apply(repo, 'v0.2.0', CONTENT, 'x', '--from', src);
   assert.notEqual(run.status, 0);
   assert.match(run.stderr, /refusing to go from v0.3.0 back to v0.2.0/);
-  assert.equal(apply(consumer, 'v0.2.0', 'acme/agentbase', 'x', '--from', src, '--force').status, 0);
+  assert.equal(apply(repo, 'v0.2.0', CONTENT, 'x', '--from', src, '--force').status, 0);
+});
+
+test('apply refuses a downgrade of a legacy consumer still on <owner>/agentbase sources', () => {
+  const run = apply(legacyConsumer(), 'v0.2.0', 'acme/agentbase', 'x', '--from', agentspreadFixture());
+  assert.match(run.stderr, /refusing to go from v0.3.0 back to v0.2.0/);
 });
 
 test('apply stops on a malformed agentspread.json', () => {
-  const consumer = legacyConsumer();
-  writeFileSync(join(consumer, 'agentspread.json'), '{ "groups": ["common", "backend",] }');
-  const run = apply(consumer, 'v1.0.0', 'acme/agentbase', 'x', '--from', agentspreadFixture());
+  const repo = consumer();
+  writeFileSync(join(repo, 'agentspread.json'), '{ "groups": ["common", "backend",] }');
+  const run = apply(repo, 'v1.0.0', CONTENT, 'x', '--from', agentspreadFixture());
   assert.notEqual(run.status, 0);
-  assert.equal(existsSync(join(consumer, '.agentspread')), false);
+  assert.equal(existsSync(join(repo, '.agentspread')), false);
 });
 
 test('apply refuses to overwrite hooks a repo wrote by hand', () => {
@@ -202,40 +215,56 @@ test('apply refuses to overwrite hooks a repo wrote by hand', () => {
     'rulesync.jsonc': '{\n  "features": ["skills"]\n}\n',
     '.claude/settings.json': { hooks: { Stop: [{ hooks: [{ type: 'command', command: 'mine' }] }] } },
   });
-  const run = apply(consumer, 'v1.0.0', 'acme/agentbase', 'x', '--from', agentspreadFixture());
+  const run = apply(consumer, 'v1.0.0', CONTENT, 'x', '--from', agentspreadFixture());
   assert.notEqual(run.status, 0);
   assert.match(run.stderr, /already has hooks/);
 });
 
 test('summary lists what changed in .agentspread for the PR', () => {
-  const consumer = legacyConsumer();
-  execFileSync('git', ['init', '-q'], { cwd: consumer });
-  assert.equal(apply(consumer, 'v1.0.0', 'acme/agentbase', 'x', '--from', agentspreadFixture()).status, 0);
-  const out = execFileSync('node', [SCRIPT, 'summary'], { cwd: consumer, encoding: 'utf8' }).trim();
+  const repo = consumer();
+  execFileSync('git', ['init', '-q'], { cwd: repo });
+  assert.equal(apply(repo, 'v1.0.0', CONTENT, 'x', '--from', agentspreadFixture()).status, 0);
+  const out = execFileSync('node', [SCRIPT, 'summary'], { cwd: repo, encoding: 'utf8' }).trim();
   assert.equal(out, 'skills: shared (new); subagents: reviewer (new); hooks: hooks.json (new)');
 });
 
 test('apply --set-groups replaces the groups and --targets the agents', () => {
-  const consumer = legacyConsumer();
+  const repo = consumer();
   const src = agentspreadFixture();
-  assert.equal(apply(consumer, 'v1.0.0', 'acme/agentbase', 'x', '--groups', 'backend,web', '--from', src).status, 0);
-  assert.deepEqual(readdirSync(join(consumer, '.agentspread/skills')).sort(), ['api', 'shared', 'ui']);
+  assert.equal(apply(repo, 'v1.0.0', CONTENT, 'x', '--groups', 'backend,web', '--targets', 'claudecode,codexcli', '--from', src).status, 0);
+  assert.deepEqual(readdirSync(join(repo, '.agentspread/skills')).sort(), ['api', 'shared', 'ui']);
 
-  const run = apply(consumer, 'v1.0.0', 'acme/agentbase', 'x', '--set-groups', 'web', '--targets', 'claudecode', '--from', src);
+  const run = apply(repo, 'v1.0.0', CONTENT, 'x', '--set-groups', 'web', '--targets', 'claudecode', '--from', src);
   assert.equal(run.status, 0, run.stderr);
-  assert.deepEqual(JSON.parse(readFileSync(join(consumer, 'agentspread.json'), 'utf8')).groups, ['common', 'web']);
-  assert.deepEqual(readdirSync(join(consumer, '.agentspread/skills')).sort(), ['shared', 'ui']);
-  assert.equal(existsSync(join(consumer, '.agentspread/commands')), false, 'backend was the only group with commands');
-  assert.deepEqual(jsonc(readFileSync(join(consumer, 'rulesync.jsonc'), 'utf8')).targets, ['claudecode']);
+  assert.deepEqual(JSON.parse(readFileSync(join(repo, 'agentspread.json'), 'utf8')).groups, ['common', 'web']);
+  assert.deepEqual(readdirSync(join(repo, '.agentspread/skills')).sort(), ['shared', 'ui']);
+  assert.equal(existsSync(join(repo, '.agentspread/commands')), false, 'backend was the only group with commands');
+  assert.deepEqual(jsonc(readFileSync(join(repo, 'rulesync.jsonc'), 'utf8')).targets, ['claudecode']);
 });
 
-test('apply moves a consumer from <owner>/agentbase to a renamed content repo', () => {
-  const consumer = legacyConsumer();
-  const run = apply(consumer, 'v0.1.0', 'acme/agentbase-config', 'x', '--from', agentspreadFixture());
+test('apply moves a consumer from <owner>/agentbase to a differently named content repo', () => {
+  const repo = legacyConsumer();
+  const run = apply(repo, 'v0.1.0', CONTENT, 'x', '--from', agentspreadFixture());
   assert.equal(run.status, 0, run.stderr);
-  const membership = JSON.parse(readFileSync(join(consumer, 'agentspread.json'), 'utf8'));
-  assert.equal(membership.source, 'acme/agentbase-config');
-  assert.deepEqual(jsonc(readFileSync(join(consumer, 'rulesync.jsonc'), 'utf8')).sources.map((s) => s.source), ['other/tools']);
-  const again = apply(consumer, 'v0.0.9', 'acme/agentbase-config', 'x', '--from', agentspreadFixture());
+  const membership = JSON.parse(readFileSync(join(repo, 'agentspread.json'), 'utf8'));
+  assert.equal(membership.source, CONTENT);
+  assert.deepEqual(jsonc(readFileSync(join(repo, 'rulesync.jsonc'), 'utf8')).sources.map((s) => s.source), ['other/tools']);
+  const again = apply(repo, 'v0.0.9', CONTENT, 'x', '--from', agentspreadFixture());
   assert.match(again.stderr, /refusing to go from v0.1.0 back to v0.0.9/);
+});
+
+test('apply leaves another owner\'s agentbase source and an unrelated agentbase marketplace alone', () => {
+  const settings = {
+    extraKnownMarketplaces: { agentbase: { source: { source: 'github', repo: 'other/claude-plugins' } } },
+    enabledPlugins: { 'lint@agentbase': true },
+  };
+  const repo = write(tmp(), {
+    'rulesync.jsonc': '{\n  "features": ["skills"],\n  "sources": [\n    { "source": "other/agentbase", "ref": "v2" }\n  ]\n}\n',
+    'rulesync.lock': '{}',
+    '.claude/settings.json': settings,
+  });
+  assert.equal(apply(repo, 'v1.0.0', CONTENT, 'x', '--from', agentspreadFixture()).status, 0);
+  assert.deepEqual(jsonc(readFileSync(join(repo, 'rulesync.jsonc'), 'utf8')).sources.map((s) => s.source), ['other/agentbase']);
+  assert.equal(existsSync(join(repo, 'rulesync.lock')), true);
+  assert.deepEqual(JSON.parse(readFileSync(join(repo, '.claude/settings.json'), 'utf8')), settings);
 });
