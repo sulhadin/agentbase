@@ -1,12 +1,12 @@
-# Opens a PR when a new agentbase version is out: the `uses:` pins in .github/workflows and the
+# Opens a PR when a new agentspread version is out: the `uses:` pins in .github/workflows and the
 # package in package.json. Merge them together so the workflows and the CLI stay on one version.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
-    groups: { agentbase: { patterns: ["*"] } }
+    groups: { agentspread: { patterns: ["*"] } }
   - package-ecosystem: npm
     directory: /
     schedule: { interval: weekly }
-    groups: { agentbase: { patterns: ["agentbase"] } }
+    groups: { agentspread: { patterns: ["agentspread"] } }

@@ -1,4 +1,4 @@
-# Releases the agentbase package: version from conventional commits, npm publish, tag and GitHub release.
+# Releases the agentspread package: version from conventional commits, npm publish, tag and GitHub release.
 # Content repos pin the tag in their `uses:` lines and the version in their package.json.
 name: publish
 on:

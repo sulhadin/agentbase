@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { lintGroups } from '../scripts/lint-groups.mjs';
 
 const repo = (files) => {
-  const root = mkdtempSync(join(tmpdir(), 'agentbase-lint-'));
+  const root = mkdtempSync(join(tmpdir(), 'agentspread-lint-'));
   for (const [path, content] of Object.entries(files)) {
     mkdirSync(dirname(join(root, path)), { recursive: true });
     writeFileSync(join(root, path), content);
@@ -53,7 +53,7 @@ test('typos in a group are reported instead of silently ignored', () => {
 test('hooks must be valid and reference scripts that exist', () => {
   const errors = errorsOf({
     'groups/common/hooks.json': JSON.stringify({
-      hooks: { postToolUse: [{ command: 'bash .agentbase/scripts/common/fmt.sh' }, { command: '.agentbase/scripts/common/missing.sh' }] },
+      hooks: { postToolUse: [{ command: 'bash .agentspread/scripts/common/fmt.sh' }, { command: '.agentspread/scripts/common/missing.sh' }] },
     }),
     'groups/common/scripts/fmt.sh': 'echo',
   }).join('\n');

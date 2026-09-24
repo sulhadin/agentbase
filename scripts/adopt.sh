@@ -2,12 +2,12 @@
 set -euo pipefail
 
 USAGE='Adopt the current repo as a consumer of a content repo. Run from the consumer repo root:
-  npx agentbase adopt <content owner/repo> [ref] [--targets claudecode,codexcli] [--groups backend,web]
+  npx agentspread adopt <content owner/repo> [ref] [--targets claudecode,codexcli] [--groups backend,web]
 ref defaults to the content repo'"'"'s latest release. Groups are folders under its groups/: common is
 always included, and so is the group named after this repo when it exists. The choice is recorded in
-agentbase.json.'
+agentspread.json.'
 
-ROOT="${AGENTBASE_ROOT:-$(cd "$(dirname "$0")/.." && pwd)/}"
+ROOT="${AGENTSPREAD_ROOT:-$(cd "$(dirname "$0")/.." && pwd)/}"
 TARGETS="claudecode,codexcli"
 SKILL_GROUPS=""
 POS=()
@@ -48,18 +48,18 @@ else
   mv "$work/rulesync.jsonc" rulesync.jsonc
 fi
 
-echo "▸ copying $SOURCE $REF into .agentbase/"
+echo "▸ copying $SOURCE $REF into .agentspread/"
 node "${ROOT}scripts/sync-consumer.mjs" apply "$REF" "$SOURCE" "$REPO_NAME" --groups "$SKILL_GROUPS"
 
 echo "▸ CI workflow"
 mkdir -p .github/workflows
-[ -f .github/workflows/agentbase-check.yml ] || cp "${ROOT}templates/consumer/consumer-ci.yml" .github/workflows/agentbase-check.yml
+[ -f .github/workflows/agentspread-check.yml ] || cp "${ROOT}templates/consumer/consumer-ci.yml" .github/workflows/agentspread-check.yml
 
 echo "▸ generating agent files"
 npx --yes rulesync@16 generate --delete
 
 echo "▸ checking .gitignore does not hide generated files"
-ignored=$(git ls-files --others --ignored --exclude-standard -- .agentbase .claude .agents .codex .github \
+ignored=$(git ls-files --others --ignored --exclude-standard -- .agentspread .claude .agents .codex .github \
   .cursor .opencode .cline .roo .kiro .junie .warp .qwen .augment | grep -v '\.local\.' || true)
 if [ -n "$ignored" ]; then
   echo "✗ .gitignore hides these generated files, so they would never be committed:" >&2
@@ -70,15 +70,15 @@ if [ -n "$ignored" ]; then
 fi
 
 echo "▸ repo topic"
-gh repo edit "$OWNER/$REPO_NAME" --add-topic agentbase-consumer 2>/dev/null \
-  || echo "  add the GitHub topic 'agentbase-consumer' manually (gh could not edit $OWNER/$REPO_NAME)"
+gh repo edit "$OWNER/$REPO_NAME" --add-topic agentspread-consumer 2>/dev/null \
+  || echo "  add the GitHub topic 'agentspread-consumer' manually (gh could not edit $OWNER/$REPO_NAME)"
 
 cat <<MSG
 
 Done. Review and commit everything, generated files included:
-  - agentbase.json          ← the content repo, its release and this repo's groups
-  - .agentbase/             ← $SOURCE at $REF; never edit by hand
-  - rulesync.jsonc, .github/workflows/agentbase-check.yml, generated agent folders
+  - agentspread.json          ← the content repo, its release and this repo's groups
+  - .agentspread/             ← $SOURCE at $REF; never edit by hand
+  - rulesync.jsonc, .github/workflows/agentspread-check.yml, generated agent folders
   - .rulesync/              ← this repo's own skills; delete any that $SOURCE now ships
 Append to CODEOWNERS (use a team, e.g. @org/platform, for an organization):
 MSG

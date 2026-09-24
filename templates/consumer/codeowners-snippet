@@ -1,4 +1,4 @@
-# agentbase: what reaches every agent in this repo is reviewed by its maintainers
-agentbase.json   @__ORG__
+# agentspread: what reaches every agent in this repo is reviewed by its maintainers
+agentspread.json   @__ORG__
 rulesync.jsonc   @__ORG__
-.agentbase/      @__ORG__
+.agentspread/      @__ORG__

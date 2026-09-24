@@ -1,6 +1,6 @@
 // semantic-release config for content repos, loaded by the reusable release workflow.
 // It runs inside the content repo, which has none of these packages installed: semantic-release looks
-// plugins up from its working directory, so each is resolved here, next to agentbase's node_modules.
+// plugins up from its working directory, so each is resolved here, next to agentspread's node_modules.
 const local = (name) => require.resolve(name);
 const preset = { config: local('conventional-changelog-conventionalcommits') };
 

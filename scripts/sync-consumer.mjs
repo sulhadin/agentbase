@@ -3,7 +3,7 @@
 //   node sync-consumer.mjs apply <ref> <content owner/repo> <consumer repo> [--groups a,b | --set-groups a,b]
 //                                [--targets a,b] [--from <content checkout>] [--force]
 //   node sync-consumer.mjs summary
-// The groups' content is copied into .agentbase/ (committed) and rulesync generates every agent's files
+// The groups' content is copied into .agentspread/ (committed) and rulesync generates every agent's files
 // from it plus the repo's own .rulesync/, so nothing is fetched at generate time and cloud agents see it all.
 import { execFileSync } from 'node:child_process';
 import {
@@ -13,8 +13,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const MEMBERSHIP_FILE = 'agentbase.json';
-export const VENDOR_DIR = '.agentbase';
+export const MEMBERSHIP_FILE = 'agentspread.json';
+export const VENDOR_DIR = '.agentspread';
 export const INPUT_ROOTS = [VENDOR_DIR, '.rulesync'];
 const PARTS = ['skills', 'subagents', 'commands', 'hooks'];
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -33,7 +33,7 @@ export function readMembership(text) {
   return { source: str(data.source), ref: str(data.ref), groups: data.groups };
 }
 
-// Before content repos had any name, a consumer's content always came from <owner>/agentbase.
+// Before agentspread, a consumer's content always came from a repo named <owner>/agentbase.
 const legacySource = (source) => `${source.split('/')[0]}/agentbase`;
 const sourcePattern = (source) =>
   `(?:${escapeRegExp(source)}|${escapeRegExp(legacySource(source))})(?::[^"]*)?`;
@@ -69,7 +69,7 @@ export function mergeHooks(hookFiles) {
 
 // Copies the chosen groups into vendorDir; a name defined by two groups is an error, since rulesync would
 // silently keep only one of them.
-export function vendorGroups(agentbaseDir, groups, vendorDir) {
+export function vendorGroups(agentspreadDir, groups, vendorDir) {
   rmSync(vendorDir, { recursive: true, force: true });
   const owner = new Map();
   const claim = (kind, name, group) => {
@@ -79,7 +79,7 @@ export function vendorGroups(agentbaseDir, groups, vendorDir) {
   };
   const hookFiles = [];
   for (const group of groups) {
-    const src = join(agentbaseDir, 'groups', group);
+    const src = join(agentspreadDir, 'groups', group);
     for (const skill of listDir(join(src, 'skills')).filter((e) => e.isDirectory())) {
       claim('skill', skill.name, group);
       cpSync(join(src, 'skills', skill.name), join(vendorDir, 'skills', skill.name), { recursive: true });
@@ -91,7 +91,7 @@ export function vendorGroups(agentbaseDir, groups, vendorDir) {
         cpSync(join(src, kind, file.name), join(vendorDir, kind, file.name));
       }
     }
-    // Namespaced by group, so hooks can reference .agentbase/scripts/<group>/<file> without collisions.
+    // Namespaced by group, so hooks can reference .agentspread/scripts/<group>/<file> without collisions.
     if (existsSync(join(src, 'scripts'))) cpSync(join(src, 'scripts'), join(vendorDir, 'scripts', group), { recursive: true });
     if (existsSync(join(src, 'hooks.json'))) {
       hookFiles.push({ group, data: JSON.parse(readFileSync(join(src, 'hooks.json'), 'utf8')) });
@@ -113,7 +113,7 @@ export function featuresFor(existing, roots) {
 }
 
 // Edits rulesync.jsonc as text to keep its comments: sets features and inputRoots, and drops the
-// agentbase `sources` entries of consumers adopted before .agentbase/ existed.
+// agentspread `sources` entries of consumers adopted before .agentspread/ existed.
 export function updateRulesyncConfig(text, { source, features, targets }) {
   const list = (xs) => `[${xs.map((x) => `"${x}"`).join(', ')}]`;
   let lines = text.split('\n');
@@ -155,7 +155,7 @@ export function updateRulesyncConfig(text, { source, features, targets }) {
   return lines.join('\n');
 }
 
-// Earlier releases served subagents and commands as a Claude Code plugin from an agentbase marketplace.
+// Before agentspread, subagents and commands came as a Claude Code plugin from an "agentbase" marketplace.
 export function dropMarketplace(settings) {
   const market = settings.extraKnownMarketplaces?.agentbase;
   if (market?.source?.repo?.toLowerCase().endsWith('/agentbase')) delete settings.extraKnownMarketplaces.agentbase;
@@ -188,7 +188,7 @@ export function summarize(nameStatus) {
 }
 
 function downloadSource(source, ref) {
-  const dir = mkdtempSync(join(tmpdir(), 'agentbase-'));
+  const dir = mkdtempSync(join(tmpdir(), 'agentspread-'));
   const archive = execFileSync('gh', ['api', `repos/${source}/tarball/${encodeURIComponent(ref)}`], {
     maxBuffer: 256 * 1024 * 1024,
   });
@@ -222,8 +222,8 @@ function apply(ref, source, repo, { groups: requested = [], setGroups, targets, 
     throw new Error(`refusing to go from ${current.ref} back to ${ref}; pass --force`);
   }
 
-  const agentbaseDir = from ?? downloadSource(source, ref);
-  const available = listDir(join(agentbaseDir, 'groups')).filter((e) => e.isDirectory()).map((e) => e.name).sort();
+  const agentspreadDir = from ?? downloadSource(source, ref);
+  const available = listDir(join(agentspreadDir, 'groups')).filter((e) => e.isDirectory()).map((e) => e.name).sort();
   if (!available.includes('common')) throw new Error(`${source} ${ref} has no groups/common/`);
   // --set-groups replaces the membership (reconfiguring); --groups only adds to it (adopting, syncing).
   const { groups, dropped } = setGroups
@@ -231,15 +231,15 @@ function apply(ref, source, repo, { groups: requested = [], setGroups, targets, 
     : resolveGroups(membership?.groups ?? null, { available, repo, requested });
 
   const hadVendor = existsSync(VENDOR_DIR);
-  vendorGroups(agentbaseDir, groups, VENDOR_DIR);
+  vendorGroups(agentspreadDir, groups, VENDOR_DIR);
   if (existsSync(join(VENDOR_DIR, 'hooks.json'))) {
     if (existsSync('.rulesync/hooks.json')) {
-      throw new Error(`.rulesync/hooks.json would replace agentbase's hooks; move them to agentbase's groups/${repo}/hooks.json`);
+      throw new Error(`.rulesync/hooks.json would replace agentspread's hooks; move them to agentspread's groups/${repo}/hooks.json`);
     }
     const settings = existsSync('.claude/settings.json') ? JSON.parse(readFileSync('.claude/settings.json', 'utf8')) : {};
     // rulesync replaces the whole "hooks" key, so hooks written by hand would be lost silently.
     if (!hadVendor && settings.hooks && Object.keys(settings.hooks).length) {
-      throw new Error(`.claude/settings.json already has hooks, which generation would overwrite; move them to agentbase's groups/${repo}/hooks.json`);
+      throw new Error(`.claude/settings.json already has hooks, which generation would overwrite; move them to agentspread's groups/${repo}/hooks.json`);
     }
   }
 
@@ -249,7 +249,7 @@ function apply(ref, source, repo, { groups: requested = [], setGroups, targets, 
   if (existsSync('rulesync.lock') && !/"sources":\s*\[[^\]]*\{/s.test(updated.replace(/^\s*\/\/.*$/gm, ''))) {
     rmSync('rulesync.lock');
     // What the old sources fetched stays in local clones and, as part of the .rulesync/ input root,
-    // would keep generating skills agentbase has since dropped.
+    // would keep generating skills agentspread has since dropped.
     for (const dir of ['.rulesync/skills/.curated', '.rulesync/rules/.curated']) rmSync(dir, { recursive: true, force: true });
   }
   if (existsSync('.claude/settings.json')) {

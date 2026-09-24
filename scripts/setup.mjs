@@ -80,7 +80,7 @@ const repos = JSON.parse(
   gh('repo', 'list', owner, '--limit', '1000', '--no-archived', '--json', 'name,isPrivate,repositoryTopics'),
 ).filter((r) => r.name !== contentRepo);
 // The topic is added when the adoption PR opens, so it also marks repos whose PR was closed unmerged.
-const tagged = repos.filter((r) => (r.repositoryTopics ?? []).some((t) => t.name === 'agentbase-consumer'));
+const tagged = repos.filter((r) => (r.repositoryTopics ?? []).some((t) => t.name === 'agentspread-consumer'));
 const adopted = new Set(tagged.filter((r) => readFile(r.name, 'rulesync.jsonc') !== null).map((r) => r.name));
 
 const mode = await ask(select({
@@ -97,9 +97,9 @@ if (mode === 'reconfigure') {
     pageSize: 15,
     choices: [...adopted].sort().map((name) => ({ name, value: name })),
   }));
-  const membership = readFile(repo, 'agentbase.json');
+  const membership = readFile(repo, 'agentspread.json');
   if (!membership) {
-    console.error(`${repo} has no agentbase.json yet; it gets one with its next agentbase sync.`);
+    console.error(`${repo} has no agentspread.json yet; it gets one with its next agentspread sync.`);
     process.exit(1);
   }
   const { ref, groups: currentGroups, source: consumerSource } = JSON.parse(membership);
@@ -115,7 +115,7 @@ if (mode === 'reconfigure') {
   Repo:    ${repo} (stays on ${consumerSource ?? source} ${ref})
   Groups:  ${currentGroups.join(', ')} → ${['common', ...selectedGroups, ...(groups.includes(repo) ? [repo] : [])].join(', ')}
   Agents:  ${currentTargets.join(', ')} → ${targets.join(', ')}
-  Opens or updates a PR on chore/agentbase-reconfigure.
+  Opens or updates a PR on chore/agentspread-reconfigure.
 `);
   if (!(await ask(confirm({ message: 'Open the PR?', default: true })))) process.exit(0);
   run(script('reconfigure.sh'), [repo, '--groups', selectedGroups.join(','), '--targets', targets.join(',')]);
@@ -148,7 +148,7 @@ if (mode === 'reconfigure') {
   Repos:   ${selectedRepos.join(', ')}
   Groups:  ${['common', ...selectedGroups].join(', ')} (+ a group named after each repo, if one exists)
   Writes:  ${dirs.join(', ')}
-  Each repo gets a PR on chore/adopt-agentbase. The GitHub App needs access to
+  Each repo gets a PR on chore/adopt-agentspread. The GitHub App needs access to
   these repos, or later release PRs will not reach them.
 `);
   if (!(await ask(confirm({ message: 'Open the PRs?', default: true })))) process.exit(0);

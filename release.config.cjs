@@ -1,4 +1,4 @@
-// semantic-release config for the agentbase package itself (publish.yml). Content repos use release.content.cjs.
+// semantic-release config for the agentspread package itself (publish.yml). Content repos use release.content.cjs.
 module.exports = {
   branches: ['main'],
   tagFormat: 'v${version}',

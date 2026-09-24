@@ -22,14 +22,14 @@ const [command, ...args] = process.argv.slice(2);
 if (command === '--version' || command === '-v') {
   console.log(version);
 } else if (!COMMANDS[command]) {
-  console.log(`agentbase ${version}\n\nUsage: npx agentbase <command>\n`);
+  console.log(`agentspread ${version}\n\nUsage: npx agentspread <command>\n`);
   for (const [name, [, , about]] of Object.entries(COMMANDS)) console.log(`  ${name.padEnd(12)} ${about}`);
   process.exit(command && command !== '--help' && command !== '-h' ? 1 : 0);
 } else {
   const [runner, script, , prefix = []] = COMMANDS[command];
   const run = spawnSync(runner, [`${root}${script}`, ...prefix, ...args], {
     stdio: 'inherit',
-    env: { ...process.env, AGENTBASE_ROOT: root, AGENTBASE_VERSION: version },
+    env: { ...process.env, AGENTSPREAD_ROOT: root, AGENTSPREAD_VERSION: version },
   });
   process.exit(run.status ?? 1);
 }

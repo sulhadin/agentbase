@@ -1,6 +1,6 @@
 # __NAME__
 
-This repo holds the AI agent skills, subagents, commands and hooks shared across __OWNER__'s repos. [agentbase](https://github.com/__ENGINE__) rolls them out: every release opens a PR in each consumer repo with exactly its groups.
+This repo holds the AI agent skills, subagents, commands and hooks shared across __OWNER__'s repos. [agentspread](https://github.com/__ENGINE__) rolls them out: every release opens a PR in each consumer repo with exactly its groups.
 
 ## Change something
 
@@ -19,6 +19,6 @@ npm install
 npm run setup
 ```
 
-## Update agentbase
+## Update agentspread
 
-Dependabot opens a PR when a new agentbase version is out. It updates the `uses:` lines and `package.json` together; merge it like any other PR.
+Dependabot opens a PR when a new agentspread version is out. It updates the `uses:` lines and `package.json` together; merge it like any other PR.
