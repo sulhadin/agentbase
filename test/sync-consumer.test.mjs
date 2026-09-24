@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
-  dropMarketplace, featuresFor, isDowngrade, mergeHooks, readMembership, resolveGroups, summarize,
+  featuresFor, isDowngrade, mergeHooks, readMembership, resolveGroups, summarize,
   updateRulesyncConfig, vendorGroups,
 } from '../scripts/sync-consumer.mjs';
 
@@ -32,26 +32,6 @@ const agentspreadFixture = () =>
     'groups/backend/scripts/fmt.sh': 'echo fmt',
     'groups/backend/hooks.json': { version: 1, hooks: { postToolUse: [{ matcher: 'Edit', command: 'b' }] } },
     'groups/web/skills/ui/SKILL.md': skill('ui'),
-  });
-
-const legacyConsumer = () =>
-  write(tmp(), {
-    'rulesync.jsonc': `{
-  "targets": ["claudecode", "codexcli"],
-  "features": ["skills"],
-  "sources": [
-    // Bumped automatically by agentbase's sync workflow. Do not edit by hand.
-    { "source": "Acme/agentbase", "ref": "v0.3.0", "skills": ["*"] },
-    { "source": "other/tools", "ref": "v1", "skills": ["x"] }
-  ]
-}
-`,
-    'rulesync.lock': '{}',
-    '.claude/settings.json': {
-      permissions: { allow: ['Bash(ls)'] },
-      extraKnownMarketplaces: { agentbase: { source: { source: 'github', repo: 'acme/agentbase', ref: 'v0.3.0' } } },
-      enabledPlugins: { 'agentbase@agentbase': true },
-    },
   });
 
 const CONTENT = 'acme/agentspread-config';
@@ -122,29 +102,24 @@ test('featuresFor turns on parts that exist and keeps unrelated features', () =>
   assert.deepEqual(featuresFor(['skills', 'rules', 'commands'], [root]), ['skills', 'rules', 'subagents', 'hooks']);
 });
 
-test('updateRulesyncConfig drops agentbase sources, keeps others valid and adds inputRoots', () => {
-  const text = readFileSync(join(legacyConsumer(), 'rulesync.jsonc'), 'utf8');
-  const once = updateRulesyncConfig(text, { source: 'acme/agentbase', features: ['skills', 'subagents'] });
+test('updateRulesyncConfig sets targets and features, adds inputRoots and keeps the rest', () => {
+  const text = `{
+  // the repo's own note
+  "targets": ["claudecode"],
+  "features": ["skills"],
+  "sources": [
+    { "source": "other/tools", "ref": "v1", "skills": ["x"] }
+  ]
+}
+`;
+  const once = updateRulesyncConfig(text, { features: ['skills', 'subagents'], targets: ['claudecode', 'codexcli'] });
   const config = jsonc(once);
-  assert.deepEqual(config.sources, [{ source: 'other/tools', ref: 'v1', skills: ['x'] }]);
+  assert.deepEqual(config.targets, ['claudecode', 'codexcli']);
   assert.deepEqual(config.features, ['skills', 'subagents']);
   assert.deepEqual(config.inputRoots, ['.agentspread', '.rulesync']);
-  assert.equal(updateRulesyncConfig(once, { source: 'acme/agentbase', features: ['skills', 'subagents'] }), once);
-});
-
-test('updateRulesyncConfig handles a config without sources and refuses inline agentbase sources', () => {
-  const plain = '{\n  "targets": ["claudecode"],\n  "features": ["skills"]\n}\n';
-  assert.deepEqual(jsonc(updateRulesyncConfig(plain, { source: 'acme/agentbase', features: ['skills'] })).inputRoots, ['.agentspread', '.rulesync']);
-  const inline = '{\n  "features": ["skills"],\n  "sources": [{ "source": "acme/agentbase", "ref": "v1" }]\n}\n';
-  assert.throws(() => updateRulesyncConfig(inline, { source: 'acme/agentbase', features: ['skills'] }), /one entry per line/);
-});
-
-test('dropMarketplace removes only the agentbase marketplace and its plugins', () => {
-  const settings = dropMarketplace({
-    extraKnownMarketplaces: { agentbase: { source: { repo: 'Acme/agentbase' } }, other: { source: { repo: 'x/y' } } },
-    enabledPlugins: { 'common@agentbase': true, 'lint@other': true },
-  });
-  assert.deepEqual(settings, { extraKnownMarketplaces: { other: { source: { repo: 'x/y' } } }, enabledPlugins: { 'lint@other': true } });
+  assert.deepEqual(config.sources, [{ source: 'other/tools', ref: 'v1', skills: ['x'] }]);
+  assert.match(once, /the repo's own note/);
+  assert.equal(updateRulesyncConfig(once, { features: ['skills', 'subagents'] }), once);
 });
 
 test('summarize groups the vendored changes by kind', () => {
@@ -159,35 +134,6 @@ test('summarize groups the vendored changes by kind', () => {
   assert.equal(summarize(''), 'none');
 });
 
-test('apply migrates a pre-.agentspread consumer end to end', () => {
-  const consumer = legacyConsumer();
-  const run = apply(consumer, 'v1.0.0', 'acme/agentbase', 'web', '--from', agentspreadFixture());
-  assert.equal(run.status, 0, run.stderr);
-  assert.deepEqual(JSON.parse(readFileSync(join(consumer, 'agentspread.json'), 'utf8')), {
-    source: 'acme/agentbase', ref: 'v1.0.0', groups: ['common', 'web'],
-  });
-  assert.deepEqual(readdirSync(join(consumer, '.agentspread/skills')).sort(), ['shared', 'ui']);
-  const config = jsonc(readFileSync(join(consumer, 'rulesync.jsonc'), 'utf8'));
-  assert.deepEqual(config.sources.map((s) => s.source), ['other/tools']);
-  assert.deepEqual(config.features, ['skills', 'subagents', 'hooks']);
-  assert.equal(existsSync(join(consumer, 'rulesync.lock')), true, 'kept: other/tools still needs it');
-  const settings = JSON.parse(readFileSync(join(consumer, '.claude/settings.json'), 'utf8'));
-  assert.deepEqual(settings, { permissions: { allow: ['Bash(ls)'] } });
-});
-
-test('apply removes the lockfile and fetched copies once no source is left', () => {
-  const consumer = write(tmp(), {
-    'rulesync.jsonc': '{\n  "features": ["skills"],\n  "sources": [\n    { "source": "acme/agentbase", "ref": "v0.3.0" }\n  ]\n}\n',
-    'rulesync.lock': '{}',
-    '.rulesync/skills/.curated/dropped/SKILL.md': skill('dropped'),
-    '.rulesync/skills/own/SKILL.md': skill('own'),
-  });
-  assert.equal(apply(consumer, 'v1.0.0', 'acme/agentbase', 'x', '--from', agentspreadFixture()).status, 0);
-  assert.equal(existsSync(join(consumer, 'rulesync.lock')), false);
-  assert.equal(existsSync(join(consumer, '.rulesync/skills/.curated')), false);
-  assert.equal(existsSync(join(consumer, '.rulesync/skills/own/SKILL.md')), true);
-});
-
 test('apply refuses a downgrade unless forced', () => {
   const repo = consumer();
   const src = agentspreadFixture();
@@ -195,11 +141,6 @@ test('apply refuses a downgrade unless forced', () => {
   assert.notEqual(run.status, 0);
   assert.match(run.stderr, /refusing to go from v0.3.0 back to v0.2.0/);
   assert.equal(apply(repo, 'v0.2.0', CONTENT, 'x', '--from', src, '--force').status, 0);
-});
-
-test('apply refuses a downgrade of a legacy consumer still on <owner>/agentbase sources', () => {
-  const run = apply(legacyConsumer(), 'v0.2.0', 'acme/agentbase', 'x', '--from', agentspreadFixture());
-  assert.match(run.stderr, /refusing to go from v0.3.0 back to v0.2.0/);
 });
 
 test('apply stops on a malformed agentspread.json', () => {
@@ -242,29 +183,3 @@ test('apply --set-groups replaces the groups and --targets the agents', () => {
   assert.deepEqual(jsonc(readFileSync(join(repo, 'rulesync.jsonc'), 'utf8')).targets, ['claudecode']);
 });
 
-test('apply moves a consumer from <owner>/agentbase to a differently named content repo', () => {
-  const repo = legacyConsumer();
-  const run = apply(repo, 'v0.1.0', CONTENT, 'x', '--from', agentspreadFixture());
-  assert.equal(run.status, 0, run.stderr);
-  const membership = JSON.parse(readFileSync(join(repo, 'agentspread.json'), 'utf8'));
-  assert.equal(membership.source, CONTENT);
-  assert.deepEqual(jsonc(readFileSync(join(repo, 'rulesync.jsonc'), 'utf8')).sources.map((s) => s.source), ['other/tools']);
-  const again = apply(repo, 'v0.0.9', CONTENT, 'x', '--from', agentspreadFixture());
-  assert.match(again.stderr, /refusing to go from v0.1.0 back to v0.0.9/);
-});
-
-test('apply leaves another owner\'s agentbase source and an unrelated agentbase marketplace alone', () => {
-  const settings = {
-    extraKnownMarketplaces: { agentbase: { source: { source: 'github', repo: 'other/claude-plugins' } } },
-    enabledPlugins: { 'lint@agentbase': true },
-  };
-  const repo = write(tmp(), {
-    'rulesync.jsonc': '{\n  "features": ["skills"],\n  "sources": [\n    { "source": "other/agentbase", "ref": "v2" }\n  ]\n}\n',
-    'rulesync.lock': '{}',
-    '.claude/settings.json': settings,
-  });
-  assert.equal(apply(repo, 'v1.0.0', CONTENT, 'x', '--from', agentspreadFixture()).status, 0);
-  assert.deepEqual(jsonc(readFileSync(join(repo, 'rulesync.jsonc'), 'utf8')).sources.map((s) => s.source), ['other/agentbase']);
-  assert.equal(existsSync(join(repo, 'rulesync.lock')), true);
-  assert.deepEqual(JSON.parse(readFileSync(join(repo, '.claude/settings.json'), 'utf8')), settings);
-});

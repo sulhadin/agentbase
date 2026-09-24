@@ -6,7 +6,6 @@ import { fileURLToPath } from 'node:url';
 
 const KEBAB = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const GROUP_ENTRIES = new Set(['skills', 'subagents', 'commands', 'scripts', 'hooks.json', 'README.md']);
-const LEGACY = ['skills', '.rulesync', 'plugins', '.claude-plugin'];
 const listDir = (dir) => (existsSync(dir) ? readdirSync(dir, { withFileTypes: true }) : []);
 
 export function frontmatter(text) {
@@ -36,9 +35,6 @@ export function lintGroups(root) {
     else owners.set(key, where);
   };
 
-  for (const legacy of LEGACY) {
-    if (existsSync(join(root, legacy))) errors.push(`${legacy}/ is no longer read; move its content into groups/<group>/`);
-  }
   if (!existsSync(join(root, 'groups', 'common'))) errors.push('groups/common/ is required; every consumer gets it');
 
   for (const group of listDir(join(root, 'groups')).filter((e) => e.isDirectory()).map((e) => e.name)) {

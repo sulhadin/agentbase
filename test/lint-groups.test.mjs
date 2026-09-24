@@ -26,9 +26,8 @@ test('a well-formed repo passes', () => {
   assert.deepEqual(warnings, []);
 });
 
-test('common is required and legacy folders are rejected', () => {
+test('common is required', () => {
   assert.match(errorsOf({ 'groups/web/skills/a/SKILL.md': skill('a') }).join(), /groups\/common\/ is required/);
-  assert.match(errorsOf({ 'groups/common/skills/a/SKILL.md': skill('a'), 'skills/old/SKILL.md': skill('old') }).join(), /skills\/ is no longer read/);
 });
 
 test('names must be kebab-case, match their folder and be unique across groups', () => {
