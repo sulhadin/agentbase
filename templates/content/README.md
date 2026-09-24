@@ -21,4 +21,4 @@ npm run setup
 
 ## Update agentspread
 
-Dependabot opens a PR when a new agentspread version is out. It updates the `uses:` lines and `package.json` together; merge it like any other PR.
+Dependabot opens two PRs when a new agentspread version is out: one for the `uses:` pins in `.github/workflows/`, one for `package.json`. Merge both so the workflows and the CLI stay on one version.
