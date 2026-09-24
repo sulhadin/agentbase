@@ -41,7 +41,7 @@ Generation replaces the whole `hooks` key in a consumer's `.claude/settings.json
 
 ## Lint
 
-`npm run lint` locally, and the check workflow on every PR. It fails on layout mistakes: bad names, duplicates, missing hook scripts, and content left in old root folders (`skills/`, `.rulesync/`, `plugins/`, `.claude-plugin/`) instead of `groups/`. It warns on what needs a careful review, because it runs code or skips prompts on every developer's machine: hooks, `allowed-tools`, `permissionMode`, `` !`command` `` lines and frontmatter hooks.
+`npm run lint` locally, and the check workflow on every PR. It fails on layout mistakes: a missing `groups/common/`, bad names, duplicates and missing hook scripts. It warns on what needs a careful review, because it runs code or skips prompts on every developer's machine: hooks, `allowed-tools`, `permissionMode`, `` !`command` `` lines and frontmatter hooks.
 
 ## Gotchas
 

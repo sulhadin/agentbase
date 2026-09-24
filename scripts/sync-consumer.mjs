@@ -17,7 +17,6 @@ export const MEMBERSHIP_FILE = 'agentspread.json';
 export const VENDOR_DIR = '.agentspread';
 export const INPUT_ROOTS = [VENDOR_DIR, '.rulesync'];
 const PARTS = ['skills', 'subagents', 'commands', 'hooks'];
-const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const unique = (xs) => [...new Set(xs)];
 const listDir = (dir) => (existsSync(dir) ? readdirSync(dir, { withFileTypes: true }) : []);
 
@@ -32,11 +31,6 @@ export function readMembership(text) {
   const str = (v) => (typeof v === 'string' ? v : null);
   return { source: str(data.source), ref: str(data.ref), groups: data.groups };
 }
-
-// Before agentspread, a consumer's content always came from a repo named <owner>/agentbase.
-const legacySource = (source) => `${source.split('/')[0]}/agentbase`;
-const sourcePattern = (source) =>
-  `(?:${escapeRegExp(source)}|${escapeRegExp(legacySource(source))})(?::[^"]*)?`;
 
 export function resolveGroups(current, { available, repo, requested = [] }) {
   const unknown = requested.filter((g) => !available.includes(g));
@@ -112,26 +106,10 @@ export function featuresFor(existing, roots) {
   return unique([...existing.filter((f) => !PARTS.includes(f) || present.includes(f)), ...present]);
 }
 
-// Edits rulesync.jsonc as text to keep its comments: sets features and inputRoots, and drops the
-// legacy `<owner>/agentbase` `sources` entries of consumers adopted before .agentspread/ existed.
-export function updateRulesyncConfig(text, { source, features, targets }) {
+// Edits rulesync.jsonc as text to keep its comments: sets targets, features and inputRoots.
+export function updateRulesyncConfig(text, { features, targets }) {
   const list = (xs) => `[${xs.map((x) => `"${x}"`).join(', ')}]`;
-  let lines = text.split('\n');
-
-  const ours = new RegExp(`"source":\\s*"${sourcePattern(source)}"`, 'i');
-  const open = lines.findIndex((l) => /"sources":\s*\[/.test(l));
-  if (open >= 0) {
-    if (/"sources":\s*\[.*\]/.test(lines[open])) {
-      if (ours.test(lines[open])) throw new Error('rulesync.jsonc "sources" must hold one entry per line');
-    } else {
-      const close = lines.findIndex((l, i) => i > open && /^\s*\]/.test(l));
-      if (close < 0) throw new Error('rulesync.jsonc "sources" is not closed on its own line');
-      const body = lines.slice(open + 1, close).filter((l) => !ours.test(l));
-      const entries = body.map((l, i) => (/^\s*\{/.test(l) ? i : -1)).filter((i) => i >= 0);
-      const fixed = body.map((l, i) => (entries.includes(i) ? l.replace(/\s*,?\s*$/, i === entries.at(-1) ? '' : ',') : l));
-      lines = [...lines.slice(0, open + 1), ...fixed, ...lines.slice(close)];
-    }
-  }
+  const lines = text.split('\n');
 
   if (targets) {
     const targetsAt = lines.findIndex((l) => /"targets":\s*\[[^\]]*\]/.test(l));
@@ -153,20 +131,6 @@ export function updateRulesyncConfig(text, { source, features, targets }) {
     lines.splice(featuresAt + 1, 0, `${indent}"inputRoots": ${list(INPUT_ROOTS)}${lastProp ? '' : ','}`);
   }
   return lines.join('\n');
-}
-
-// Before agentspread, subagents and commands came as a Claude Code plugin from an "agentbase" marketplace.
-export function dropMarketplace(settings) {
-  const market = settings.extraKnownMarketplaces?.agentbase;
-  // An unrelated marketplace that happens to be called "agentbase" keeps its plugins.
-  if (market && !market.source?.repo?.toLowerCase().endsWith('/agentbase')) return settings;
-  if (market) delete settings.extraKnownMarketplaces.agentbase;
-  if (settings.extraKnownMarketplaces && !Object.keys(settings.extraKnownMarketplaces).length) {
-    delete settings.extraKnownMarketplaces;
-  }
-  for (const key of Object.keys(settings.enabledPlugins ?? {})) if (key.endsWith('@agentbase')) delete settings.enabledPlugins[key];
-  if (settings.enabledPlugins && !Object.keys(settings.enabledPlugins).length) delete settings.enabledPlugins;
-  return settings;
 }
 
 export function summarize(nameStatus) {
@@ -213,15 +177,11 @@ function apply(ref, source, repo, { groups: requested = [], setGroups, targets, 
   if (!/^[^/\s]+\/[^/\s]+$/.test(source)) throw new Error(`content repo must be owner/name, got "${source}"`);
   if (!existsSync('rulesync.jsonc')) throw new Error('run from a consumer root with rulesync.jsonc');
   const config = readFileSync('rulesync.jsonc', 'utf8');
-  const legacy = config.match(new RegExp(`"source":\\s*"(${sourcePattern(source)})"[^}]*"ref":\\s*"([^"]+)"`, 'i'));
   const membership = existsSync(MEMBERSHIP_FILE) ? readMembership(readFileSync(MEMBERSHIP_FILE, 'utf8')) : null;
-  const current = membership
-    ? { source: membership.source, ref: membership.ref }
-    : legacy && { source: legacy[1].split(':')[0], ref: legacy[2] };
   // Versions of two different content repos say nothing about each other.
-  const sameSource = current?.source?.toLowerCase() === source.toLowerCase();
-  if (!force && sameSource && isDowngrade(current.ref, ref)) {
-    throw new Error(`refusing to go from ${current.ref} back to ${ref}; pass --force`);
+  const sameSource = membership?.source?.toLowerCase() === source.toLowerCase();
+  if (!force && sameSource && isDowngrade(membership.ref, ref)) {
+    throw new Error(`refusing to go from ${membership.ref} back to ${ref}; pass --force`);
   }
 
   const agentspreadDir = from ?? downloadSource(source, ref);
@@ -246,21 +206,7 @@ function apply(ref, source, repo, { groups: requested = [], setGroups, targets, 
   }
 
   const existing = JSON.parse(config.replace(/^\s*\/\/.*$/gm, '').match(/"features":\s*(\[[^\]]*\])/)?.[1] ?? '[]');
-  const updated = updateRulesyncConfig(config, { source, features: featuresFor(existing, INPUT_ROOTS), targets });
-  writeFileSync('rulesync.jsonc', updated);
-  if (existsSync('rulesync.lock') && !/"sources":\s*\[[^\]]*\{/s.test(updated.replace(/^\s*\/\/.*$/gm, ''))) {
-    rmSync('rulesync.lock');
-    // What the old sources fetched stays in local clones and, as part of the .rulesync/ input root,
-    // would keep generating skills agentspread has since dropped.
-    for (const dir of ['.rulesync/skills/.curated', '.rulesync/rules/.curated']) rmSync(dir, { recursive: true, force: true });
-  }
-  if (existsSync('.claude/settings.json')) {
-    const before = JSON.parse(readFileSync('.claude/settings.json', 'utf8'));
-    const after = dropMarketplace(structuredClone(before));
-    if (JSON.stringify(before) !== JSON.stringify(after)) {
-      writeFileSync('.claude/settings.json', `${JSON.stringify(after, null, 2)}\n`);
-    }
-  }
+  writeFileSync('rulesync.jsonc', updateRulesyncConfig(config, { features: featuresFor(existing, INPUT_ROOTS), targets }));
   writeFileSync(MEMBERSHIP_FILE, `${JSON.stringify({ source, ref, groups }, null, 2)}\n`);
 
   console.log(`groups: ${groups.join(', ')}`);

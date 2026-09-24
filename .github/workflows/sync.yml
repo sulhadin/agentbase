@@ -119,10 +119,7 @@ jobs:
             exit 0
           fi
           old=$(node -e 'try { console.log(require("./agentspread.json").ref ?? "") } catch { console.log("") }')
-          [ -n "$old" ] || old=$(grep -ioE '"source": *"[^"]*/agentbase[^"]*"[^}]*"ref": *"[^"]+"' rulesync.jsonc \
-            | sed -E 's/.*"ref": *"([^"]+)"$/\1/' | head -1)
           echo "old=${old:-none}" >> "$GITHUB_OUTPUT"
-          [ -f agentspread.json ] || echo "migrated=true" >> "$GITHUB_OUTPUT"
           node ../engine/scripts/sync-consumer.mjs apply "$REF" "$GITHUB_REPOSITORY" "$REPO" --from ../content $FORCE
       - name: Generate agent files
         if: steps.apply.outputs.skip != 'true'
@@ -137,7 +134,6 @@ jobs:
           GH_TOKEN: ${{ steps.read.outputs.token }}
           REF: ${{ inputs.ref }}
           OLD: ${{ steps.apply.outputs.old }}
-          MIGRATED: ${{ steps.apply.outputs.migrated }}
           REPO: ${{ matrix.repo }}
         run: |
           if [ -z "$(git status --porcelain)" ]; then
@@ -165,7 +161,6 @@ jobs:
             echo "## Changelog"
             echo "- Bump \`$GITHUB_REPOSITORY\` \`$OLD\` → \`$REF\`"
             echo "- Changed: $changed"
-            [ "$MIGRATED" != true ] || echo "- Moves this repo from the old agentbase setup (rulesync \`sources\` and the agentbase Claude Code plugin) to agentspread: content is committed in \`.agentspread/\`, groups are in \`agentspread.json\`, and subagents, commands and hooks are generated files; skills no longer shipped are removed."
             echo
             echo "## Description"
             echo "Automated rollout of shared AI agent config. \`.agentspread/\` and the generated agent files are rewritten on every sync; do not edit them by hand."
