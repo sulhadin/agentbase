@@ -1,5 +1,5 @@
 {
-  "name": "agentbase",
+  "name": "agentspread",
   "version": "0.0.0",
   "description": "Share AI agent skills, subagents, commands and hooks across repos: one content repo, a PR in every consumer on each release.",
   "keywords": [
@@ -12,15 +12,15 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sulhadin/agentbase.git"
+    "url": "git+https://github.com/sulhadin/agentspread.git"
   },
-  "homepage": "https://github.com/sulhadin/agentbase#readme",
+  "homepage": "https://github.com/sulhadin/agentspread#readme",
   "bugs": {
-    "url": "https://github.com/sulhadin/agentbase/issues"
+    "url": "https://github.com/sulhadin/agentspread/issues"
   },
   "type": "module",
   "bin": {
-    "agentbase": "bin/agentbase.mjs"
+    "agentspread": "bin/agentspread.mjs"
   },
   "files": [
     "bin/",

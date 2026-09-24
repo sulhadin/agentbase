@@ -1,13 +1,13 @@
 {
   "name": "__NAME__",
   "private": true,
-  "description": "Shared AI agent skills, subagents, commands and hooks, rolled out by agentbase.",
+  "description": "Shared AI agent skills, subagents, commands and hooks, rolled out by agentspread.",
   "scripts": {
-    "setup": "agentbase setup",
-    "reconfigure": "agentbase reconfigure",
-    "lint": "agentbase lint"
+    "setup": "agentspread setup",
+    "reconfigure": "agentspread reconfigure",
+    "lint": "agentspread lint"
   },
   "devDependencies": {
-    "agentbase": "__VERSION__"
+    "agentspread": "__VERSION__"
   }
 }

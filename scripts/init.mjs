@@ -1,12 +1,12 @@
 // Scaffolds a content repo in the current directory: example groups, the workflows that call
-// agentbase's reusable ones at this package's version, Dependabot for updates, and package.json.
+// agentspread's reusable ones at this package's version, Dependabot for updates, and package.json.
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 
-const root = process.env.AGENTBASE_ROOT;
-const version = process.env.AGENTBASE_VERSION;
-if (!root || !version) throw new Error('run through the agentbase CLI: npx agentbase init');
+const root = process.env.AGENTSPREAD_ROOT;
+const version = process.env.AGENTSPREAD_VERSION;
+if (!root || !version) throw new Error('run through the agentspread CLI: npx agentspread init');
 const force = process.argv.includes('--force');
 const cwd = process.cwd();
 
@@ -58,7 +58,7 @@ const walk = (dir) => {
 };
 walk(template);
 
-console.log(`agentbase ${version}: scaffolded ${owner}/${name}\n`);
+console.log(`agentspread ${version}: scaffolded ${owner}/${name}\n`);
 for (const file of written.sort()) console.log(`  ${file}`);
 console.log(`
 Next:
@@ -68,8 +68,8 @@ Next:
      ${owner}/${name} and every repo that will consume it:
        https://github.com/${engine}#3-create-the-github-app-that-opens-the-prs
   3. Create a "release" environment in ${owner}/${name} limited to main, holding the App's secrets:
-       gh secret set AGENTBASE_APP_ID --env release --body <app id>
-       gh secret set AGENTBASE_APP_PRIVATE_KEY --env release < <downloaded>.private-key.pem
+       gh secret set AGENTSPREAD_APP_ID --env release --body <app id>
+       gh secret set AGENTSPREAD_APP_PRIVATE_KEY --env release < <downloaded>.private-key.pem
   4. Actions → release → Run workflow, for the first release.
   5. npm install && npm run setup, to pick the repos that consume it.
 `);

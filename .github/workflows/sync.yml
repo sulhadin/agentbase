@@ -1,6 +1,6 @@
 # Reusable: rolls a content repo's release out. Called by release.yml, or by the content repo's own
 # sync workflow to roll a tag out by hand. Opens (or updates) a PR in every repo of the content repo's
-# owner tagged `agentbase-consumer`, copying its groups at that tag into .agentbase/ and regenerating.
+# owner tagged `agentspread-consumer`, copying its groups at that tag into .agentspread/ and regenerating.
 name: sync consumers
 on:
   workflow_call:
@@ -9,8 +9,8 @@ on:
       repo: { description: "Only this consumer repo (optional)", type: string, required: false, default: "" }
       force: { description: "Allow rolling a repo back to an older tag", type: boolean, required: false, default: false }
     secrets:
-      AGENTBASE_APP_ID: { required: true }
-      AGENTBASE_APP_PRIVATE_KEY: { required: true }
+      AGENTSPREAD_APP_ID: { required: true }
+      AGENTSPREAD_APP_PRIVATE_KEY: { required: true }
 
 env:
   # A consumer's project .npmrc must not be able to swap the package that runs here.
@@ -27,8 +27,8 @@ jobs:
       - uses: actions/create-github-app-token@v3
         id: app
         with:
-          app-id: ${{ secrets.AGENTBASE_APP_ID }}
-          private-key: ${{ secrets.AGENTBASE_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.AGENTSPREAD_APP_ID }}
+          private-key: ${{ secrets.AGENTSPREAD_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           permission-metadata: read
       - id: list
@@ -40,7 +40,7 @@ jobs:
           if [ -n "$REPO" ]; then
             repos=$(jq -cn --arg r "$REPO" '[$r]')
           else
-            repos=$(gh repo list "$OWNER" --topic agentbase-consumer --no-archived --limit 1000 --json name -q '[.[].name]')
+            repos=$(gh repo list "$OWNER" --topic agentspread-consumer --no-archived --limit 1000 --json name -q '[.[].name]')
             [ "$(jq length <<<"$repos")" -lt 1000 ] || { echo "::error::1000+ consumers; paginate discovery"; exit 1; }
           fi
           echo "repos=$repos" >> "$GITHUB_OUTPUT"
@@ -56,9 +56,9 @@ jobs:
       max-parallel: 5
       matrix:
         repo: ${{ fromJson(needs.discover.outputs.repos) }}
-    # Two rollouts to one repo would race on chore/agentbase-sync; the later one waits instead.
+    # Two rollouts to one repo would race on chore/agentspread-sync; the later one waits instead.
     concurrency:
-      group: agentbase-sync-${{ matrix.repo }}
+      group: agentspread-sync-${{ matrix.repo }}
       cancel-in-progress: false
     defaults:
       run:
@@ -67,8 +67,8 @@ jobs:
       - uses: actions/create-github-app-token@v3
         id: write
         with:
-          app-id: ${{ secrets.AGENTBASE_APP_ID }}
-          private-key: ${{ secrets.AGENTBASE_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.AGENTSPREAD_APP_ID }}
+          private-key: ${{ secrets.AGENTSPREAD_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ matrix.repo }}
           permission-contents: write
@@ -76,8 +76,8 @@ jobs:
       - uses: actions/create-github-app-token@v3
         id: read
         with:
-          app-id: ${{ secrets.AGENTBASE_APP_ID }}
-          private-key: ${{ secrets.AGENTBASE_APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.AGENTSPREAD_APP_ID }}
+          private-key: ${{ secrets.AGENTSPREAD_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
           permission-contents: read
@@ -104,7 +104,7 @@ jobs:
       - uses: actions/setup-node@v7
         # npx needs no install, and v5+ auto-caching fails when a packageManager field has no lockfile.
         with: { node-version: 22, package-manager-cache: false }
-      - name: Copy the release into .agentbase/
+      - name: Copy the release into .agentspread/
         id: apply
         env:
           REF: ${{ inputs.ref }}
@@ -118,11 +118,11 @@ jobs:
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          old=$(node -e 'try { console.log(require("./agentbase.json").ref ?? "") } catch { console.log("") }')
+          old=$(node -e 'try { console.log(require("./agentspread.json").ref ?? "") } catch { console.log("") }')
           [ -n "$old" ] || old=$(grep -ioE '"source": *"[^"]*/agentbase[^"]*"[^}]*"ref": *"[^"]+"' rulesync.jsonc \
             | sed -E 's/.*"ref": *"([^"]+)"$/\1/' | head -1)
           echo "old=${old:-none}" >> "$GITHUB_OUTPUT"
-          [ -f agentbase.json ] || echo "migrated=true" >> "$GITHUB_OUTPUT"
+          [ -f agentspread.json ] || echo "migrated=true" >> "$GITHUB_OUTPUT"
           node ../engine/scripts/sync-consumer.mjs apply "$REF" "$GITHUB_REPOSITORY" "$REPO" --from ../content $FORCE
       - name: Generate agent files
         if: steps.apply.outputs.skip != 'true'
@@ -147,28 +147,28 @@ jobs:
           fi
           echo "open=true" >> "$GITHUB_OUTPUT"
           changed=$(node ../engine/scripts/sync-consumer.mjs summary)
-          ignored=$(git ls-files --others --ignored --exclude-standard -- .agentbase .claude .agents .codex .github \
+          ignored=$(git ls-files --others --ignored --exclude-standard -- .agentspread .claude .agents .codex .github \
             .cursor .opencode .cline .roo .kiro .junie .warp .qwen .augment | grep -v '\.local\.' | paste -sd' ' - || true)
           [ -z "$ignored" ] || echo "::warning::$REPO: .gitignore hides generated files: $ignored"
           # Release notes are free text, so a fixed heredoc delimiter could end the output early.
           eof="EOF_$(openssl rand -hex 8)"
           {
-            echo "title=chore(agentbase): update shared AI agent config to $REF"
+            echo "title=chore(agentspread): update shared AI agent config to $REF"
             echo "commit<<$eof"
-            echo "chore(agentbase): update shared AI agent config to $REF"
+            echo "chore(agentspread): update shared AI agent config to $REF"
             echo
-            echo "Copy $GITHUB_REPOSITORY $REF (was $OLD) into .agentbase/ and regenerate."
+            echo "Copy $GITHUB_REPOSITORY $REF (was $OLD) into .agentspread/ and regenerate."
             echo
             echo "Changed: $changed"
             echo "$eof"
             echo "body<<$eof"
             echo "## Changelog"
-            echo "- Bump agentbase \`$OLD\` → \`$REF\`"
+            echo "- Bump agentspread \`$OLD\` → \`$REF\`"
             echo "- Changed: $changed"
-            [ "$MIGRATED" != true ] || echo "- Moves agentbase's content from rulesync \`sources\` into \`.agentbase/\` and \`agentbase.json\`; skills agentbase no longer ships are removed, and the old agentbase Claude Code plugin is replaced by committed subagents, commands and hooks."
+            [ "$MIGRATED" != true ] || echo "- Moves this repo from the old agentbase setup (rulesync \`sources\` and the agentbase Claude Code plugin) to agentspread: content is committed in \`.agentspread/\`, groups are in \`agentspread.json\`, and subagents, commands and hooks are generated files; skills no longer shipped are removed."
             echo
             echo "## Description"
-            echo "Automated rollout of shared AI agent config. \`.agentbase/\` and the generated agent files are rewritten on every sync; do not edit them by hand."
+            echo "Automated rollout of shared AI agent config. \`.agentspread/\` and the generated agent files are rewritten on every sync; do not edit them by hand."
             echo
             if [ -n "$ignored" ]; then
               echo "## Before merge"
@@ -183,9 +183,9 @@ jobs:
         with:
           path: consumer
           token: ${{ steps.write.outputs.token }}
-          branch: chore/agentbase-sync
+          branch: chore/agentspread-sync
           delete-branch: true
           commit-message: ${{ steps.msg.outputs.commit }}
           title: ${{ steps.msg.outputs.title }}
           body: ${{ steps.msg.outputs.body }}
-          labels: agentbase
+          labels: agentspread

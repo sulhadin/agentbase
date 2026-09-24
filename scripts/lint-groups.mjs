@@ -96,9 +96,9 @@ export function lintGroups(root) {
         }
         warnings.push(`${dir}/hooks.json: hooks run on every developer machine in every consumer of ${group}`);
         const text = JSON.stringify(hooks);
-        for (const [, g, path] of text.matchAll(/\.agentbase\/scripts\/([^/"\s]+)\/([^"\s\\]+)/g)) {
+        for (const [, g, path] of text.matchAll(/\.agentspread\/scripts\/([^/"\s]+)\/([^"\s\\]+)/g)) {
           if (!existsSync(join(root, 'groups', g, 'scripts', path))) {
-            errors.push(`${dir}/hooks.json: .agentbase/scripts/${g}/${path} does not exist as groups/${g}/scripts/${path}`);
+            errors.push(`${dir}/hooks.json: .agentspread/scripts/${g}/${path} does not exist as groups/${g}/scripts/${path}`);
           }
         }
       }

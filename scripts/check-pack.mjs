@@ -2,16 +2,16 @@
 import { readFileSync } from 'node:fs';
 
 const REQUIRED = [
-  'bin/agentbase.mjs',
+  'bin/agentspread.mjs',
   'release.content.cjs',
   'scripts/init.mjs', 'scripts/setup.mjs', 'scripts/sync-consumer.mjs', 'scripts/lint-groups.mjs',
   'scripts/adopt.sh', 'scripts/onboard.sh', 'scripts/reconfigure.sh',
   'templates/consumer/rulesync.jsonc', 'templates/consumer/consumer-ci.yml', 'templates/consumer/codeowners-snippet',
   'templates/content/package.json', 'templates/content/gitignore', 'templates/content/README.md',
   'templates/content/.github/dependabot.yml',
-  'templates/content/.github/workflows/agentbase-release.yml',
-  'templates/content/.github/workflows/agentbase-sync.yml',
-  'templates/content/.github/workflows/agentbase-check.yml',
+  'templates/content/.github/workflows/agentspread-release.yml',
+  'templates/content/.github/workflows/agentspread-sync.yml',
+  'templates/content/.github/workflows/agentspread-check.yml',
   'templates/content/groups/common/skills/example-skill/SKILL.md',
 ];
 const [pack] = JSON.parse(readFileSync(0, 'utf8'));

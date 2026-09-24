@@ -2,15 +2,15 @@
 set -euo pipefail
 
 USAGE='Make repos consumers of this content repo and open a PR in each. Run inside the content repo:
-  npx agentbase onboard <repo>... [--targets claudecode,codexcli] [--groups backend,web]
+  npx agentspread onboard <repo>... [--targets claudecode,codexcli] [--groups backend,web]
 <repo> is a name under the content repo'"'"'s owner, or owner/name.
 The GitHub App must have access to each repo for later sync PRs.'
 
-ROOT="${AGENTBASE_ROOT:-$(cd "$(dirname "$0")/.." && pwd)/}"
+ROOT="${AGENTSPREAD_ROOT:-$(cd "$(dirname "$0")/.." && pwd)/}"
 SOURCE=$(gh repo view --json nameWithOwner -q .nameWithOwner) \
   || { echo "✗ run this inside the content repo (a GitHub checkout with groups/)" >&2; exit 1; }
 OWNER="${SOURCE%%/*}"
-BRANCH=chore/adopt-agentbase
+BRANCH=chore/adopt-agentspread
 
 REPOS=()
 ADOPT_FLAGS=()
@@ -27,30 +27,30 @@ done
 pr_body() {
   cat <<EOF
 ## Changelog
-- Copy \`$SOURCE\` \`$1\` into \`.agentbase/\` (groups in \`agentbase.json\`) and generate every chosen agent's files from it and \`.rulesync/\`.
-- Add the \`agentbase check\` drift workflow.
+- Copy \`$SOURCE\` \`$1\` into \`.agentspread/\` (groups in \`agentspread.json\`) and generate every chosen agent's files from it and \`.rulesync/\`.
+- Add the \`agentspread check\` drift workflow.
 
 ## Description
 Makes this repo a consumer of \`$SOURCE\`: its future releases arrive here as automated PRs.
 
 ## Before merge
-- Review \`.agentbase/hooks.json\` and \`.agentbase/scripts/\` if present: hooks run on every developer machine.
-- If this repo had its own skills, they are in \`.rulesync/\`; delete any that agentbase now ships and run \`npx rulesync@16 generate --delete\`.
-- Groups and agents can be changed later with \`npx agentbase setup\` in \`$SOURCE\`.
+- Review \`.agentspread/hooks.json\` and \`.agentspread/scripts/\` if present: hooks run on every developer machine.
+- If this repo had its own skills, they are in \`.rulesync/\`; delete any that agentspread now ships and run \`npx rulesync@16 generate --delete\`.
+- Groups and agents can be changed later with \`npx agentspread setup\` in \`$SOURCE\`.
 EOF
 }
 
 adoption_details() {
   local targets groups parts generated
   targets=$(grep -oE '"targets": *\[[^]]*\]' rulesync.jsonc | grep -oE '"[a-z-]+"' | tr -d '"' | grep -vx targets | paste -sd, - | sed 's/,/, /g')
-  groups=$(node -e 'console.log(require("./agentbase.json").groups.join(", "))')
+  groups=$(node -e 'console.log(require("./agentspread.json").groups.join(", "))')
   parts=$(for k in skills subagents commands; do
-    n=$(ls ".agentbase/$k" 2>/dev/null | sed 's/\.md$//' | paste -sd, - | sed 's/,/, /g')
+    n=$(ls ".agentspread/$k" 2>/dev/null | sed 's/\.md$//' | paste -sd, - | sed 's/,/, /g')
     [ -z "$n" ] || echo "$k: $n"
-  done; [ ! -f .agentbase/hooks.json ] || echo "hooks: yes")
-  generated=$(git diff --cached --name-only | grep -v '^\.agentbase/\|^\.rulesync/' | cut -d/ -f1-2 | sort -u | paste -sd, - | sed 's/,/, /g')
+  done; [ ! -f .agentspread/hooks.json ] || echo "hooks: yes")
+  generated=$(git diff --cached --name-only | grep -v '^\.agentspread/\|^\.rulesync/' | cut -d/ -f1-2 | sort -u | paste -sd, - | sed 's/,/, /g')
   cat <<EOF
-Copy $SOURCE $1 into .agentbase/ and generate files for
+Copy $SOURCE $1 into .agentspread/ and generate files for
 $targets.
 
 Groups: $groups
@@ -84,9 +84,9 @@ for repo in "${REPOS[@]}"; do
     cd "$dir"
     git switch -q -c "$BRANCH"
     bash "${ROOT}scripts/adopt.sh" "$SOURCE" ${ADOPT_FLAGS[@]+"${ADOPT_FLAGS[@]}"}
-    ref=$(node -e 'console.log(require("./agentbase.json").ref)')
+    ref=$(node -e 'console.log(require("./agentspread.json").ref)')
     git add -A
-    title="chore(agentbase): adopt shared AI agent config at $ref"
+    title="chore(agentspread): adopt shared AI agent config at $ref"
     git commit -q -F - <<EOF
 $title
 

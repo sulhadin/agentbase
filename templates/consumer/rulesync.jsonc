@@ -1,8 +1,8 @@
 {
   "$schema": "https://github.com/dyoshikawa/rulesync/releases/latest/download/config-schema.json",
-  // agentbase keeps "features" and "inputRoots" in step with .agentbase/ on every sync.
-  // .agentbase/ is agentbase's content; .rulesync/ is this repo's own and wins on a name clash.
+  // agentspread keeps "features" and "inputRoots" in step with .agentspread/ on every sync.
+  // .agentspread/ is agentspread's content; .rulesync/ is this repo's own and wins on a name clash.
   "targets": [__TARGETS__],
   "features": ["skills"],
-  "inputRoots": [".agentbase", ".rulesync"]
+  "inputRoots": [".agentspread", ".rulesync"]
 }

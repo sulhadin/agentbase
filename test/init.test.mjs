@@ -7,34 +7,34 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { lintGroups } from '../scripts/lint-groups.mjs';
 
-const CLI = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'agentbase.mjs');
+const CLI = join(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'agentspread.mjs');
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 // No gh remote in a temp dir, so init falls back to the placeholder owner and the folder name.
 const init = (cwd, ...args) => spawnSync('node', [CLI, 'init', ...args], { cwd, encoding: 'utf8', env: { ...process.env, GH_TOKEN: '' } });
 
 test('init scaffolds a content repo pinned to this version', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'agentbase-init-'));
+  const dir = mkdtempSync(join(tmpdir(), 'agentspread-init-'));
   const run = init(dir);
   assert.equal(run.status, 0, run.stderr);
   for (const file of ['.gitignore', 'README.md', 'package.json', '.github/dependabot.yml', 'groups/common/skills/example-skill/SKILL.md']) {
     assert.ok(existsSync(join(dir, file)), file);
   }
-  const release = readFileSync(join(dir, '.github/workflows/agentbase-release.yml'), 'utf8');
-  assert.match(release, new RegExp(`uses: sulhadin/agentbase/\\.github/workflows/release\\.yml@v${version.replaceAll('.', '\\.')}`));
+  const release = readFileSync(join(dir, '.github/workflows/agentspread-release.yml'), 'utf8');
+  assert.match(release, new RegExp(`uses: sulhadin/agentspread/\\.github/workflows/release\\.yml@v${version.replaceAll('.', '\\.')}`));
   const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
-  assert.equal(pkg.devDependencies.agentbase, version);
+  assert.equal(pkg.devDependencies.agentspread, version);
   assert.doesNotMatch(readFileSync(join(dir, 'README.md'), 'utf8'), /__[A-Z]+__/);
   assert.deepEqual(lintGroups(dir).errors, []);
 });
 
 test('init refuses an existing content repo and merges into an existing package.json', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'agentbase-init-'));
+  const dir = mkdtempSync(join(tmpdir(), 'agentspread-init-'));
   writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'mine', scripts: { lint: 'eslint .' } }));
   assert.equal(init(dir).status, 0);
   const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
   assert.equal(pkg.name, 'mine');
   assert.equal(pkg.scripts.lint, 'eslint .', 'existing scripts win');
-  assert.equal(pkg.scripts.setup, 'agentbase setup');
+  assert.equal(pkg.scripts.setup, 'agentspread setup');
   const again = init(dir);
   assert.notEqual(again.status, 0);
   assert.match(again.stderr, /looks like a content repo already/);
