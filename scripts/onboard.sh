@@ -7,6 +7,8 @@ USAGE='Make repos consumers of this content repo and open a PR in each. Run insi
 <repo> is a name under the content repo'"'"'s owner, or owner/name.
 The GitHub App must have access to each repo for later sync PRs.'
 
+for arg in "$@"; do case "$arg" in -h|--help) echo "$USAGE"; exit 0 ;; esac; done
+
 ROOT="${AGENTSPREAD_ROOT:-$(cd "$(dirname "$0")/.." && pwd)/}"
 SOURCE=$(gh repo view --json nameWithOwner -q .nameWithOwner) \
   || { echo "✗ run this inside the content repo (a GitHub checkout with groups/)" >&2; exit 1; }

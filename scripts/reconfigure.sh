@@ -7,6 +7,8 @@ USAGE='Change a consumer'"'"'s groups and agents, keeping its release, and open 
 --groups sets the full list (common and the group named after the repo are always kept);
 --targets sets the full list of rulesync targets. Either may be left out to keep it as is.'
 
+for arg in "$@"; do case "$arg" in -h|--help) echo "$USAGE"; exit 0 ;; esac; done
+
 ROOT="${AGENTSPREAD_ROOT:-$(cd "$(dirname "$0")/.." && pwd)/}"
 SOURCE=$(gh repo view --json nameWithOwner -q .nameWithOwner) \
   || { echo "✗ run this inside the content repo (a GitHub checkout with groups/)" >&2; exit 1; }
