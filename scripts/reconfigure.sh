@@ -17,7 +17,9 @@ APPLY_FLAGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --groups)  APPLY_FLAGS+=(--set-groups "$2"); shift 2 ;;
+    --groups=*)  APPLY_FLAGS+=(--set-groups "${1#*=}"); shift ;;
     --targets) APPLY_FLAGS+=(--targets "$2"); shift 2 ;;
+    --targets=*) APPLY_FLAGS+=(--targets "${1#*=}"); shift ;;
     -h|--help) echo "$USAGE"; exit 0 ;;
     *) [ -z "$REPO" ] || { echo "$USAGE" >&2; exit 1; }; REPO="$1"; shift ;;
   esac
@@ -38,9 +40,7 @@ cd "$dir"
 git switch -q -c "$BRANCH"
 
 ref=$(node -e 'console.log(require("./agentspread.json").ref)')
-# Consumers adopted before agentspread.json recorded a source get this content repo, as sync would give them.
-source=$(node -e 'console.log(require("./agentspread.json").source ?? "")')
-source="${source:-$SOURCE}"
+source=$(node -e 'console.log(require("./agentspread.json").source)')
 before=$(describe)
 node "${ROOT}scripts/sync-consumer.mjs" apply "$ref" "$source" "${REPO#*/}" "${APPLY_FLAGS[@]}"
 npx --yes rulesync@16 generate --delete

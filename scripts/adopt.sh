@@ -79,7 +79,7 @@ Done. Review and commit everything, generated files included:
   - agentspread.json          ← the content repo, its release and this repo's groups
   - .agentspread/             ← $SOURCE at $REF; never edit by hand
   - rulesync.jsonc, .github/workflows/agentspread-check.yml, generated agent folders
-  - .rulesync/              ← this repo's own skills; delete any that $SOURCE now ships
+  - .rulesync/                ← this repo's own skills, subagents and commands; delete any that $SOURCE now ships
 Append to CODEOWNERS (use a team, e.g. @org/platform, for an organization):
 MSG
 sed "s#__ORG__#${SOURCE%%/*}#g" "${ROOT}templates/consumer/codeowners-snippet"

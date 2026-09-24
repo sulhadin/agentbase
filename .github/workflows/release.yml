@@ -62,7 +62,7 @@ jobs:
           GIT_COMMITTER_EMAIL: agentspread-release@users.noreply.github.com
         run: |
           ../engine/node_modules/.bin/semantic-release --extends ../engine/release.content.cjs
-          grep -q '^tag=' "$GITHUB_OUTPUT" || echo "::notice::No feat/fix/breaking commits since the last tag — nothing to release."
+          grep -q '^tag=' "$GITHUB_OUTPUT" || echo "::notice::No feat/fix/perf/breaking commits since the last tag — nothing to release."
   sync:
     needs: release
     # always(): a release that pushed its tag but then failed (e.g. creating the GitHub release) still rolls out.

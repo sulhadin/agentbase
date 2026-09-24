@@ -13,6 +13,8 @@ const REQUIRED = [
   'templates/content/.github/workflows/agentspread-sync.yml',
   'templates/content/.github/workflows/agentspread-check.yml',
   'templates/content/groups/common/skills/example-skill/SKILL.md',
+  'templates/content/groups/common/subagents/example-subagent.md',
+  'templates/content/groups/common/commands/example-command.md',
 ];
 const [pack] = JSON.parse(readFileSync(0, 'utf8'));
 const shipped = new Set(pack.files.map((f) => f.path));

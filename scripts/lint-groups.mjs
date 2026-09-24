@@ -108,9 +108,14 @@ export function lintGroups(root) {
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
+  if (['--help', '-h'].includes(process.argv[2])) {
+    console.log('Usage: npx agentspread lint [content repo dir]\n\nChecks groups/ (default: the current directory).');
+    process.exit(0);
+  }
   const { errors, warnings } = lintGroups(process.argv[2] ?? process.cwd());
-  for (const w of warnings) console.log(`::warning::${w}`);
-  for (const e of errors) console.log(`::error::${e}`);
+  const [warn, err] = process.env.GITHUB_ACTIONS ? ['::warning::', '::error::'] : ['warning: ', 'error: '];
+  for (const w of warnings) console.log(`${warn}${w}`);
+  for (const e of errors) console.log(`${err}${e}`);
   console.log(`${errors.length} error(s), ${warnings.length} warning(s)`);
   process.exit(errors.length ? 1 : 0);
 }

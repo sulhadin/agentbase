@@ -113,7 +113,7 @@ export function featuresFor(existing, roots) {
 }
 
 // Edits rulesync.jsonc as text to keep its comments: sets features and inputRoots, and drops the
-// agentspread `sources` entries of consumers adopted before .agentspread/ existed.
+// legacy `<owner>/agentbase` `sources` entries of consumers adopted before .agentspread/ existed.
 export function updateRulesyncConfig(text, { source, features, targets }) {
   const list = (xs) => `[${xs.map((x) => `"${x}"`).join(', ')}]`;
   let lines = text.split('\n');
@@ -158,7 +158,9 @@ export function updateRulesyncConfig(text, { source, features, targets }) {
 // Before agentspread, subagents and commands came as a Claude Code plugin from an "agentbase" marketplace.
 export function dropMarketplace(settings) {
   const market = settings.extraKnownMarketplaces?.agentbase;
-  if (market?.source?.repo?.toLowerCase().endsWith('/agentbase')) delete settings.extraKnownMarketplaces.agentbase;
+  // An unrelated marketplace that happens to be called "agentbase" keeps its plugins.
+  if (market && !market.source?.repo?.toLowerCase().endsWith('/agentbase')) return settings;
+  if (market) delete settings.extraKnownMarketplaces.agentbase;
   if (settings.extraKnownMarketplaces && !Object.keys(settings.extraKnownMarketplaces).length) {
     delete settings.extraKnownMarketplaces;
   }
@@ -214,7 +216,7 @@ function apply(ref, source, repo, { groups: requested = [], setGroups, targets, 
   const legacy = config.match(new RegExp(`"source":\\s*"(${sourcePattern(source)})"[^}]*"ref":\\s*"([^"]+)"`, 'i'));
   const membership = existsSync(MEMBERSHIP_FILE) ? readMembership(readFileSync(MEMBERSHIP_FILE, 'utf8')) : null;
   const current = membership
-    ? { source: membership.source ?? legacySource(source), ref: membership.ref }
+    ? { source: membership.source, ref: membership.ref }
     : legacy && { source: legacy[1].split(':')[0], ref: legacy[2] };
   // Versions of two different content repos say nothing about each other.
   const sameSource = current?.source?.toLowerCase() === source.toLowerCase();
@@ -234,12 +236,12 @@ function apply(ref, source, repo, { groups: requested = [], setGroups, targets, 
   vendorGroups(agentspreadDir, groups, VENDOR_DIR);
   if (existsSync(join(VENDOR_DIR, 'hooks.json'))) {
     if (existsSync('.rulesync/hooks.json')) {
-      throw new Error(`.rulesync/hooks.json would replace agentspread's hooks; move them to agentspread's groups/${repo}/hooks.json`);
+      throw new Error(`.rulesync/hooks.json would replace agentspread's hooks; move them to the content repo's groups/${repo}/hooks.json`);
     }
     const settings = existsSync('.claude/settings.json') ? JSON.parse(readFileSync('.claude/settings.json', 'utf8')) : {};
     // rulesync replaces the whole "hooks" key, so hooks written by hand would be lost silently.
     if (!hadVendor && settings.hooks && Object.keys(settings.hooks).length) {
-      throw new Error(`.claude/settings.json already has hooks, which generation would overwrite; move them to agentspread's groups/${repo}/hooks.json`);
+      throw new Error(`.claude/settings.json already has hooks, which generation would overwrite; move them to the content repo's groups/${repo}/hooks.json`);
     }
   }
 

@@ -7,6 +7,10 @@ import { basename, join, relative } from 'node:path';
 const root = process.env.AGENTSPREAD_ROOT;
 const version = process.env.AGENTSPREAD_VERSION;
 if (!root || !version) throw new Error('run through the agentspread CLI: npx agentspread init');
+if (process.argv.includes('--help') || process.argv.includes('-h')) {
+  console.log('Usage: npx agentspread init [--force]\n\nScaffolds a content repo in the current directory. --force overwrites files that already exist.');
+  process.exit(0);
+}
 const force = process.argv.includes('--force');
 const cwd = process.cwd();
 
@@ -59,6 +63,7 @@ const walk = (dir) => {
 walk(template);
 
 console.log(`agentspread ${version}: scaffolded ${owner}/${name}\n`);
+if (!fullName) console.log(`  (not a GitHub checkout, so README.md says "${owner}"; edit it, or run init after gh repo create --clone)\n`);
 for (const file of written.sort()) console.log(`  ${file}`);
 console.log(`
 Next:
@@ -66,7 +71,7 @@ Next:
      and push to main.
   2. Create the GitHub App that opens the PRs (contents + pull requests: read & write), install it on
      ${owner}/${name} and every repo that will consume it:
-       https://github.com/${engine}#3-create-the-github-app-that-opens-the-prs
+       https://github.com/${engine}/blob/main/docs/github-app.md
   3. Create a "release" environment in ${owner}/${name} limited to main, holding the App's secrets:
        gh secret set AGENTSPREAD_APP_ID --env release --body <app id>
        gh secret set AGENTSPREAD_APP_PRIVATE_KEY --env release < <downloaded>.private-key.pem
