@@ -29,7 +29,14 @@ const ask = (prompt) =>
   });
 
 const gh = (...args) => execFileSync('gh', args, { encoding: 'utf8' }).trim();
-const owner = gh('repo', 'view', '--json', 'owner', '-q', '.owner.login');
+let source;
+try {
+  source = gh('repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner');
+} catch {
+  console.error('Run this inside the content repo (a GitHub checkout with groups/).');
+  process.exit(1);
+}
+const [owner, contentRepo] = source.split('/');
 const readFile = (repo, path) => {
   try {
     return Buffer.from(gh('api', `repos/${owner}/${repo}/contents/${path}`, '-q', '.content'), 'base64').toString('utf8');
@@ -71,7 +78,7 @@ const pickGroups = (available, { current = [], autoFor = [] }) => {
 
 const repos = JSON.parse(
   gh('repo', 'list', owner, '--limit', '1000', '--no-archived', '--json', 'name,isPrivate,repositoryTopics'),
-).filter((r) => r.name !== 'agentbase');
+).filter((r) => r.name !== contentRepo);
 // The topic is added when the adoption PR opens, so it also marks repos whose PR was closed unmerged.
 const tagged = repos.filter((r) => (r.repositoryTopics ?? []).some((t) => t.name === 'agentbase-consumer'));
 const adopted = new Set(tagged.filter((r) => readFile(r.name, 'rulesync.jsonc') !== null).map((r) => r.name));
@@ -95,17 +102,17 @@ if (mode === 'reconfigure') {
     console.error(`${repo} has no agentbase.json yet; it gets one with its next agentbase sync.`);
     process.exit(1);
   }
-  const { ref, groups: currentGroups } = JSON.parse(membership);
+  const { ref, groups: currentGroups, source: consumerSource } = JSON.parse(membership);
   const currentTargets = JSON.parse(readFile(repo, 'rulesync.jsonc').match(/"targets":\s*(\[[^\]]*\])/)?.[1] ?? '[]');
   // Groups as of the repo's own release: reconfiguring keeps that release rather than upgrading it.
-  const { groups } = fetchTree(owner, ref);
+  const { groups } = fetchTree(consumerSource ?? source, ref);
 
   const selectedAgents = await pickAgents(currentTargets);
   const selectedGroups = await pickGroups(groups, { current: currentGroups, autoFor: [repo] });
   const targets = [...new Set(selectedAgents.map((a) => a.target))];
 
   console.log(`
-  Repo:    ${repo} (stays on agentbase ${ref})
+  Repo:    ${repo} (stays on ${consumerSource ?? source} ${ref})
   Groups:  ${currentGroups.join(', ')} → ${['common', ...selectedGroups, ...(groups.includes(repo) ? [repo] : [])].join(', ')}
   Agents:  ${currentTargets.join(', ')} → ${targets.join(', ')}
   Opens or updates a PR on chore/agentbase-reconfigure.
@@ -114,7 +121,7 @@ if (mode === 'reconfigure') {
   run(script('reconfigure.sh'), [repo, '--groups', selectedGroups.join(','), '--targets', targets.join(',')]);
 } else {
   const selectedRepos = await ask(checkbox({
-    message: `Repos to adopt agentbase in (${owner})`,
+    message: `Repos to feed from ${source}`,
     pageSize: 15,
     loop: false,
     required: true,
@@ -128,9 +135,9 @@ if (mode === 'reconfigure') {
 
   // Read from the latest release, since that is the ref adopt.sh pins and consumers actually fetch.
   const release = gh('release', 'view', '--json', 'tagName', '-q', '.tagName');
-  const { groups } = fetchTree(owner, release);
+  const { groups } = fetchTree(source, release);
   if (!groups.includes('common')) {
-    console.error(`agentbase ${release} has no groups/common/; release the grouped layout before onboarding.`);
+    console.error(`${source} ${release} has no groups/common/; release the grouped layout before onboarding.`);
     process.exit(1);
   }
   const selectedGroups = await pickGroups(groups, { autoFor: selectedRepos });

@@ -1,0 +1,28 @@
+# Releases the agentbase package: version from conventional commits, npm publish, tag and GitHub release.
+# Content repos pin the tag in their `uses:` lines and the version in their package.json.
+name: publish
+on:
+  workflow_dispatch:
+concurrency: publish
+jobs:
+  publish:
+    if: github.ref_name == 'main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      # npm trusted publishing: the registry accepts this workflow's OIDC token instead of an npm token.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v7
+        with: { node-version: 22, cache: npm, registry-url: https://registry.npmjs.org }
+      # Trusted publishing needs npm 11.5.1 or later; Node 22 ships npm 10.
+      - run: npm install --global npm@^11.5.1
+      - run: npm ci
+      - run: npm test
+      - run: npx semantic-release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

@@ -1,0 +1,9 @@
+# Lints groups/ and, on pull requests, checks the conventional-commit title releases are versioned from.
+name: check
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+  push:
+jobs:
+  check:
+    uses: __ENGINE__/.github/workflows/check.yml@v__VERSION__

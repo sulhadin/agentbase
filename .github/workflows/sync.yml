@@ -1,15 +1,16 @@
-# Opens (or updates) a PR in every repo tagged with the `agentbase-consumer` topic that copies the
-# given agentbase release into its .agentbase/ and regenerates every agent's files from it.
+# Reusable: rolls a content repo's release out. Called by release.yml, or by the content repo's own
+# sync workflow to roll a tag out by hand. Opens (or updates) a PR in every repo of the content repo's
+# owner tagged `agentbase-consumer`, copying its groups at that tag into .agentbase/ and regenerating.
 name: sync consumers
 on:
   workflow_call:
     inputs:
-      ref: { type: string, required: true }
-  workflow_dispatch:
-    inputs:
-      ref: { description: "agentbase tag to roll out (e.g. v1.4.0)", type: string, required: true }
-      repo: { description: "Only this repo (optional)", type: string, required: false }
-      force: { description: "Allow rolling a repo back to an older tag", type: boolean, default: false }
+      ref: { description: "content repo tag to roll out (e.g. v1.4.0)", type: string, required: true }
+      repo: { description: "Only this consumer repo (optional)", type: string, required: false, default: "" }
+      force: { description: "Allow rolling a repo back to an older tag", type: boolean, required: false, default: false }
+    secrets:
+      AGENTBASE_APP_ID: { required: true }
+      AGENTBASE_APP_PRIVATE_KEY: { required: true }
 
 env:
   # A consumer's project .npmrc must not be able to swap the package that runs here.
@@ -86,12 +87,19 @@ jobs:
           token: ${{ steps.write.outputs.token }}
           path: consumer
           persist-credentials: false
-      # The release being rolled out, so its own apply logic and content are used together.
+      # The content being rolled out.
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
           token: ${{ steps.read.outputs.token }}
-          path: agentbase
+          path: content
+          persist-credentials: false
+      # This workflow's own repo and commit, so the scripts always match the version the caller pinned.
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: engine
           persist-credentials: false
       - uses: actions/setup-node@v7
         # npx needs no install, and v5+ auto-caching fails when a packageManager field has no lockfile.
@@ -115,7 +123,7 @@ jobs:
             | sed -E 's/.*"ref": *"([^"]+)"$/\1/' | head -1)
           echo "old=${old:-none}" >> "$GITHUB_OUTPUT"
           [ -f agentbase.json ] || echo "migrated=true" >> "$GITHUB_OUTPUT"
-          node ../agentbase/scripts/sync-consumer.mjs apply "$REF" "$GITHUB_REPOSITORY_OWNER" "$REPO" --from ../agentbase $FORCE
+          node ../engine/scripts/sync-consumer.mjs apply "$REF" "$GITHUB_REPOSITORY" "$REPO" --from ../content $FORCE
       - name: Generate agent files
         if: steps.apply.outputs.skip != 'true'
         # No token here: generation reads only the checkout, so a compromised package has nothing to steal.
@@ -138,7 +146,7 @@ jobs:
             exit 0
           fi
           echo "open=true" >> "$GITHUB_OUTPUT"
-          changed=$(node ../agentbase/scripts/sync-consumer.mjs summary)
+          changed=$(node ../engine/scripts/sync-consumer.mjs summary)
           ignored=$(git ls-files --others --ignored --exclude-standard -- .agentbase .claude .agents .codex .github \
             .cursor .opencode .cline .roo .kiro .junie .warp .qwen .augment | grep -v '\.local\.' | paste -sd' ' - || true)
           [ -z "$ignored" ] || echo "::warning::$REPO: .gitignore hides generated files: $ignored"

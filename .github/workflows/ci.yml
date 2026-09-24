@@ -9,6 +9,8 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      - name: groups are well-formed
-        run: node scripts/lint-groups.mjs
+      - name: the example content init ships is well-formed
+        run: node scripts/lint-groups.mjs templates/content
       - run: npm test
+      # What `npm publish` would ship; fails if a file the CLI needs is left out of "files".
+      - run: npm pack --dry-run --json | node scripts/check-pack.mjs

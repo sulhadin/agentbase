@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-USAGE='Adopt agentbase in consumer repos and open a PR in each:
-  npm run onboard -- <repo>... [--targets claudecode,codexcli] [--groups backend,web]
-<repo> is a name under the agentbase owner, or owner/name.
+USAGE='Make repos consumers of this content repo and open a PR in each. Run inside the content repo:
+  npx agentbase onboard <repo>... [--targets claudecode,codexcli] [--groups backend,web]
+<repo> is a name under the content repo'"'"'s owner, or owner/name.
 The GitHub App must have access to each repo for later sync PRs.'
 
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
-OWNER=$(cd "$ROOT" && gh repo view --json owner -q .owner.login)
+ROOT="${AGENTBASE_ROOT:-$(cd "$(dirname "$0")/.." && pwd)/}"
+SOURCE=$(gh repo view --json nameWithOwner -q .nameWithOwner) \
+  || { echo "✗ run this inside the content repo (a GitHub checkout with groups/)" >&2; exit 1; }
+OWNER="${SOURCE%%/*}"
 BRANCH=chore/adopt-agentbase
 
 REPOS=()
@@ -25,16 +27,16 @@ done
 pr_body() {
   cat <<EOF
 ## Changelog
-- Copy agentbase \`$1\` into \`.agentbase/\` (groups in \`agentbase.json\`) and generate every chosen agent's files from it and \`.rulesync/\`.
+- Copy \`$SOURCE\` \`$1\` into \`.agentbase/\` (groups in \`agentbase.json\`) and generate every chosen agent's files from it and \`.rulesync/\`.
 - Add the \`agentbase check\` drift workflow.
 
 ## Description
-Onboards this repo to agentbase: future agentbase releases arrive here as automated PRs.
+Makes this repo a consumer of \`$SOURCE\`: its future releases arrive here as automated PRs.
 
 ## Before merge
 - Review \`.agentbase/hooks.json\` and \`.agentbase/scripts/\` if present: hooks run on every developer machine.
 - If this repo had its own skills, they are in \`.rulesync/\`; delete any that agentbase now ships and run \`npx rulesync@16 generate --delete\`.
-- Change groups in \`agentbase.json\`; the next agentbase release applies it.
+- Groups and agents can be changed later with \`npx agentbase setup\` in \`$SOURCE\`.
 EOF
 }
 
@@ -48,7 +50,7 @@ adoption_details() {
   done; [ ! -f .agentbase/hooks.json ] || echo "hooks: yes")
   generated=$(git diff --cached --name-only | grep -v '^\.agentbase/\|^\.rulesync/' | cut -d/ -f1-2 | sort -u | paste -sd, - | sed 's/,/, /g')
   cat <<EOF
-Copy $OWNER/agentbase $1 into .agentbase/ and generate files for
+Copy $SOURCE $1 into .agentbase/ and generate files for
 $targets.
 
 Groups: $groups
@@ -73,7 +75,6 @@ for repo in "${REPOS[@]}"; do
     echo "  adoption PR already open: $open_pr"; continue
   fi
 
-  # adopt.sh derives the repo for the topic from the checkout's directory name.
   dir="$(mktemp -d)/${repo#*/}"
   # A subshell tested by `if` runs with errexit off, so capture its status instead.
   set +e
@@ -82,8 +83,7 @@ for repo in "${REPOS[@]}"; do
     gh repo clone "$repo" "$dir" -- --quiet
     cd "$dir"
     git switch -q -c "$BRANCH"
-    # Templates from this checkout, so they always match the adopt.sh that fills them in.
-    AGENTBASE_DIR="$ROOT" bash "$ROOT/scripts/adopt.sh" "$OWNER" ${ADOPT_FLAGS[@]+"${ADOPT_FLAGS[@]}"}
+    bash "${ROOT}scripts/adopt.sh" "$SOURCE" ${ADOPT_FLAGS[@]+"${ADOPT_FLAGS[@]}"}
     ref=$(node -e 'console.log(require("./agentbase.json").ref)')
     git add -A
     title="chore(agentbase): adopt shared AI agent config at $ref"

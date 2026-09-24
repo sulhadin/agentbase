@@ -1,0 +1,31 @@
+# Reusable: a content repo's CI. Lints groups/ and, on pull requests, the conventional-commit title that
+# becomes the squash commit its releases are versioned from.
+name: check
+on:
+  workflow_call:
+jobs:
+  groups:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with: { path: content, persist-credentials: false }
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: engine
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with: { node-version: 22, package-manager-cache: false }
+      - run: node engine/scripts/lint-groups.mjs content
+  pr-title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - env: { TITLE: "${{ github.event.pull_request.title }}" }
+        run: |
+          re='^(feat|fix|perf|revert|refactor|docs|chore|ci|build|test|style)(\([^)]+\))?!?: .+'
+          [[ "$TITLE" =~ $re ]] || {
+            echo "::error::PR title must be a conventional commit, e.g. 'feat(groups): add api-design'"
+            exit 1
+          }
