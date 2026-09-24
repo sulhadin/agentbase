@@ -37,3 +37,29 @@ test('instructions rewrites the section in the consumer it runs in', () => {
   assert.equal(run.status, 0, run.stderr);
   assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /Shared rule\./);
 });
+
+const contentRepo = () => {
+  const dir = mkdtempSync(join(tmpdir(), 'agentspread-content-'));
+  mkdirSync(join(dir, 'groups/common/skills/a'), { recursive: true });
+  writeFileSync(join(dir, 'groups/common/skills/a/SKILL.md'), '---\nname: a\ndescription: d\n---\nbody\n');
+  return dir;
+};
+
+test('group creates the chosen placeholder parts, and the result passes lint', () => {
+  const dir = contentRepo();
+  const run = spawnSync('node', [CLI, 'group', 'backend', '--parts', 'skills,subagents,commands,instructions'], { cwd: dir, encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr);
+  for (const file of ['skills/backend-example/SKILL.md', 'subagents/backend-example.md', 'commands/backend-example.md', 'AGENTS.md']) {
+    assert.ok(readFileSync(join(dir, 'groups/backend', file), 'utf8').length, file);
+  }
+  assert.doesNotMatch(run.stdout, /The lint reports/);
+  assert.equal(cli('lint', dir).status, 0);
+});
+
+test('group refuses a taken or malformed name and an unknown part', () => {
+  const dir = contentRepo();
+  const inDir = (...args) => spawnSync('node', [CLI, 'group', ...args], { cwd: dir, encoding: 'utf8' });
+  assert.match(inDir('common').stderr, /groups\/common already exists/);
+  assert.match(inDir('Web_UI').stderr, /lowercase letters/);
+  assert.match(inDir('web', '--parts', 'hooks').stderr, /unknown part: hooks/);
+});

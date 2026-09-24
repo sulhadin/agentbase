@@ -12,6 +12,14 @@ Open a PR with a conventional title (`feat(groups): add api-design`, `fix: ...`)
 
 Open the **Actions** tab, pick the **release** workflow and click **Run workflow**. The version comes from the commits since the last tag, and every consumer repo whose content changed gets a PR.
 
+## Add a group
+
+```bash
+npm run group
+```
+
+Choose whether it is for several repos or one, name it and pick its parts. It creates placeholder files to fill in.
+
 ## Add consumer repos
 
 ```bash
