@@ -34,18 +34,7 @@ Follow [The GitHub App](github-app.md). It ends with the App installed and its k
 
 ## 4. Cut the first release
 
-Consumers pin a release, so one must exist before onboarding. Versions come from [conventional commits](https://www.conventionalcommits.org).
-
-1. Make squash merges use the PR title:
-   ```bash
-   gh api -X PATCH repos/<org>/agentspread-config -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=PR_BODY
-   ```
-2. Optional, to start at `0.x` instead of `v1.0.0`, tag the first commit:
-   ```bash
-   git tag v0.1.0 "$(git rev-list --max-parents=0 HEAD)" && git push origin v0.1.0
-   ```
-3. Commit your content with a `feat` message, e.g. `feat(groups): add initial skills`, and push it to `main`.
-4. Open the content repo's **Actions** tab, pick the **release** workflow and click **Run workflow**. Or run `gh workflow run agentspread-release.yml --repo <org>/agentspread-config`. *Releases* then shows `v1.0.0` (or `v0.2.0`). A *nothing to release* notice means there was no `feat`, `fix`, `perf` or breaking commit since the last tag.
+Consumers pin a release, so one must exist before onboarding. Follow [Releasing](releasing.md): set squash merges to use the PR title, commit your content with a `feat` message, and run the **release** workflow. *Releases* then shows `v1.0.0`.
 
 ## 5. Onboard consumer repos
 
@@ -72,6 +61,4 @@ The *sync consumers* run lists your repos under `rollout`. A repo already on tha
 
 From now on, every release opens a PR in every consumer repo it changes.
 
-## Releasing from a branch other than `main`
-
-In the content repo, open **Settings**, then **Secrets and variables**, then **Actions**, and add a variable `RELEASE_BRANCH` on the **Variables** tab. Then point the `release` environment's deployment branch at the same branch. The release workflow then refuses to run from any other branch.
+To release from a branch other than `main`, see [Releasing](releasing.md#releasing-from-a-branch-other-than-main).

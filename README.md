@@ -31,24 +31,22 @@ agentspread is the engine: an npm package (`npx agentspread …`) plus reusable 
 
 You need `gh` (logged in), Node 22+, and admin rights on the org. The full walkthrough is in [docs/setup.md](docs/setup.md).
 
-1. **Create the content repo:** `gh repo create <org>/agentspread-config --private --clone && cd agentspread-config && npx agentspread init`
+1. **Create the content repo:**
+   ```bash
+   gh repo create <org>/agentspread-config --private --clone
+   cd agentspread-config
+   npx agentspread init
+   ```
 2. **Add your content** under `groups/`: see [Writing groups](docs/groups.md).
 3. **Create the GitHub App** that opens the PRs: see [The GitHub App](docs/github-app.md).
-4. **Release:** commit with a `feat:` message, then run the **release** workflow in the content repo's Actions tab.
+4. **Release:** commit with a `feat:` message, then run the **release** workflow in the content repo's Actions tab. See [Releasing](docs/releasing.md).
 5. **Onboard repos:** `npm install && npm run setup`, pick repos, agents and groups, and merge the adoption PRs. See [Consumer repos](docs/consumer-repos.md).
 
 ## Day to day
 
-**Change something:** open a PR with a conventional title and squash-merge it.
+### Change something
 
-| PR title | Release |
-|---|---|
-| `feat(groups): add api-design` | minor |
-| `fix: ...`, `perf: ...` | patch |
-| `feat!: ...` or `BREAKING CHANGE:` in the body | major |
-| `docs:`, `chore:`, `refactor:`, `ci:`, ... | none |
-
-Changing what an agent is told or runs is `feat` or `fix`, not `docs`.
+Open a PR in the content repo with a conventional title (`feat(groups): add api-design`, `fix: ...`) and squash-merge it. The title decides the next version; see [Releasing](docs/releasing.md#how-the-version-is-chosen).
 
 ### Release
 
@@ -57,7 +55,7 @@ Changing what an agent is told or runs is `feat` or `fix`, not `docs`.
 
 Or from a terminal: `gh workflow run agentspread-release.yml`.
 
-The workflow computes the next version from the commits since the last tag, updates `CHANGELOG.md`, tags the release, and opens or updates a `chore/agentspread-sync` PR in every consumer repo whose content changed. If there is nothing to release, it stops with a notice.
+The workflow computes the next version from the commits since the last tag, updates `CHANGELOG.md`, tags the release, and opens or updates a `chore/agentspread-sync` PR in every consumer repo whose content changed. If there is nothing to release, it stops with a notice. Details in [Releasing](docs/releasing.md).
 
 ### Change a repo's groups or agents
 
@@ -83,6 +81,7 @@ Dependabot checks weekly and opens two PRs in the content repo: one for the vers
 
 - [Setup walkthrough](docs/setup.md)
 - [Writing groups](docs/groups.md)
+- [Releasing](docs/releasing.md)
 - [The GitHub App](docs/github-app.md)
 - [Consumer repos](docs/consumer-repos.md)
 - [Security](docs/security.md)
