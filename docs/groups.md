@@ -5,11 +5,11 @@ Everything in the content repo lives in **groups**, and each consumer repo gets 
 ```
 groups/
   common/                    every repo
-    skills/<name>/SKILL.md   → every agent
-    subagents/<name>.md      → Claude Code, Codex
-    commands/<name>.md       → Claude Code
-    hooks.json               → Claude Code, Codex
-    scripts/                 → files hooks run, as .agentspread/scripts/common/…
+    skills/<name>/SKILL.md   used by every agent
+    subagents/<name>.md      used by Claude Code and Codex
+    commands/<name>.md       used by Claude Code
+    hooks.json               used by Claude Code and Codex
+    scripts/                 files the hooks run, found at .agentspread/scripts/common/…
   backend/                   repos you put in the backend group
   api/                       the repo named api, automatically
 ```

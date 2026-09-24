@@ -3,7 +3,7 @@
   "private": true,
   "description": "Shared AI agent skills, subagents, commands and hooks, rolled out by agentspread.",
   "scripts": {
-    "setup": "agentspread setup",
+    "onboard": "agentspread onboard",
     "reconfigure": "agentspread reconfigure",
     "lint": "agentspread lint"
   },

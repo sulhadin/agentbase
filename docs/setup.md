@@ -15,14 +15,14 @@ Any name works. Private is the safer default: the repo holds your agents' prompt
 | File | Purpose |
 |---|---|
 | `groups/common/` | one placeholder skill, subagent and command |
-| `.github/workflows/agentspread-release.yml` | *Actions → release*: versions, tags and rolls out |
-| `.github/workflows/agentspread-sync.yml` | *Actions → sync consumers*: rolls an existing tag out again |
+| `.github/workflows/agentspread-release.yml` | the **release** workflow: versions, tags and rolls out |
+| `.github/workflows/agentspread-sync.yml` | the **sync consumers** workflow: rolls an existing tag out again |
 | `.github/workflows/agentspread-check.yml` | lints `groups/` and PR titles |
 | `.github/dependabot.yml` | PRs when a new agentspread version is out |
-| `package.json` | pins agentspread for `npm run setup` and `npm run lint` |
+| `package.json` | pins agentspread for `npm run onboard`, `npm run reconfigure` and `npm run lint` |
 | `README.md`, `.gitignore` | a short guide for your team; `node_modules/` ignored |
 
-The workflows call agentspread's reusable workflows at a pinned version. Nothing in the content repo lists consumer repos: sync finds them at run time by the `agentspread-consumer` topic.
+The workflows call agentspread's reusable workflows at a pinned version. When a new agentspread version is out, Dependabot opens two PRs: one for the pins in `.github/workflows/`, one for `package.json`. Merge both so the workflows and the CLI stay on the same version. Nothing in the content repo lists consumer repos: sync finds them at run time by the `agentspread-consumer` topic.
 
 ## 2. Put your content in
 
@@ -34,18 +34,7 @@ Follow [The GitHub App](github-app.md). It ends with the App installed and its k
 
 ## 4. Cut the first release
 
-Consumers pin a release, so one must exist before onboarding. Versions come from [conventional commits](https://www.conventionalcommits.org).
-
-1. Make squash merges use the PR title:
-   ```bash
-   gh api -X PATCH repos/<org>/agentspread-config -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=PR_BODY
-   ```
-2. Optional, to start at `0.x` instead of `v1.0.0`, tag the first commit:
-   ```bash
-   git tag v0.1.0 "$(git rev-list --max-parents=0 HEAD)" && git push origin v0.1.0
-   ```
-3. Commit your content with a `feat` message, e.g. `feat(groups): add initial skills`, and push it to `main`.
-4. *Actions → release → Run workflow*, or `gh workflow run agentspread-release.yml --repo <org>/agentspread-config`. *Releases* then shows `v1.0.0` (or `v0.2.0`). A *nothing to release* notice means there was no `feat`, `fix`, `perf` or breaking commit since the last tag.
+Consumers pin a release, so one must exist before onboarding. Follow [Releasing](releasing.md): set squash merges to use the PR title, commit your content with a `feat` message, and run the **release** workflow. *Releases* then shows `v1.0.0`.
 
 ## 5. Onboard consumer repos
 
@@ -53,7 +42,7 @@ Give the App access to them first ([step 4 of the App guide](github-app.md#4-ins
 
 ```bash
 npm install
-npm run setup
+npm run onboard
 ```
 
 Pick the repos, the agents and the groups. Repos that need different groups are onboarded in separate runs. Each repo gets an adoption PR; see [Consumer repos](consumer-repos.md) for what it adds and what to watch for.
@@ -62,16 +51,8 @@ Non-interactive: `npx agentspread onboard web api --targets claudecode,codexcli 
 
 ## 6. Check it works
 
-Merge the adoption PRs, then roll the latest release out by hand. Like the release, it must run from the release branch, since both use the `release` environment:
-
-```bash
-gh workflow run agentspread-sync.yml --repo <org>/agentspread-config -f ref=$(gh release view --repo <org>/agentspread-config --json tagName -q .tagName)
-```
-
-The *sync consumers* run lists your repos under `rollout`. A repo already on that release gets no PR; one whose adoption PR isn't merged yet is skipped with a notice.
+Merge the adoption PRs, then roll the latest release out with a [manual sync](manual-sync.md), leaving `repo` empty. The run should list your repos under `rollout`.
 
 From now on, every release opens a PR in every consumer repo it changes.
 
-## Releasing from a branch other than `main`
-
-Set the Actions variable `RELEASE_BRANCH` in the content repo (*Settings → Secrets and variables → Actions → Variables*) and point the `release` environment's deployment branch at the same branch. The release workflow then refuses to run from any other branch.
+To release from a branch other than `main`, see [Releasing](releasing.md#releasing-from-a-branch-other-than-main).

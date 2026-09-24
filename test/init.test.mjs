@@ -34,7 +34,8 @@ test('init refuses an existing content repo and merges into an existing package.
   const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
   assert.equal(pkg.name, 'mine');
   assert.equal(pkg.scripts.lint, 'eslint .', 'existing scripts win');
-  assert.equal(pkg.scripts.setup, 'agentspread setup');
+  assert.equal(pkg.scripts.onboard, 'agentspread onboard');
+  assert.equal(pkg.scripts.reconfigure, 'agentspread reconfigure');
   const again = init(dir);
   assert.notEqual(again.status, 0);
   assert.match(again.stderr, /looks like a content repo already/);

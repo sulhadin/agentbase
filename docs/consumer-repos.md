@@ -1,10 +1,10 @@
 # Consumer repos
 
-A consumer repo is any repo that receives the content repo's groups. It is onboarded once with `npm run setup` in the content repo; after that, every content release reaches it as a PR.
+A consumer repo is any repo that receives the content repo's groups. It is onboarded once with `npm run onboard` in the content repo; after that, every content release reaches it as a PR.
 
 ## Agents
 
-`setup` asks which agents each repo uses; `--targets` takes the same values.
+`npm run onboard` and `npm run reconfigure` ask which agents a repo uses; `--targets` takes the same values.
 
 | Agent | `--targets` value | Writes |
 |---|---|---|
@@ -16,7 +16,7 @@ Cursor, Copilot and OpenCode also read `.claude/skills/`, so they may list a ski
 
 ## What the adoption PR adds
 
-`npm run setup` (or `npx agentspread onboard`) clones each repo, runs [`adopt.sh`](../scripts/adopt.sh) on branch `chore/adopt-agentspread` and opens a PR. Repos already adopted, or with an open adoption PR, are skipped. The PR adds:
+`npm run onboard` clones each repo you pick, runs [`adopt.sh`](../scripts/adopt.sh) on branch `chore/adopt-agentspread` and opens a PR. Repos already adopted, or with an open adoption PR, are skipped. The PR adds:
 
 - `agentspread.json`: the pinned release and the repo's groups,
 - `.agentspread/`: those groups' content at that release,
@@ -47,4 +47,4 @@ To adopt a single repo by hand, run `npx agentspread adopt <org>/agentspread-con
 - `.rulesync/` is the repo's own and wins on a name clash, so a local skill overrides a shared one with the same name. A skill an agent writes for this repo belongs there.
 - `AGENTS.md` and `CLAUDE.md` stay yours; agentspread never touches them.
 - Don't run `rulesync gitignore`; it would ignore the files that are committed on purpose.
-- To change the repo's groups or agents, reconfigure it from the content repo (see [the README](../README.md#day-to-day)). Editing `groups` in `agentspread.json` by hand also works; the next release applies it.
+- To change the repo's groups or agents, run `npm run reconfigure` in the content repo (see [the README](../README.md#change-a-repos-groups-or-agents)). Editing `groups` in `agentspread.json` by hand also works; the next release applies it.

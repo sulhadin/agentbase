@@ -2,6 +2,7 @@
 set -euo pipefail
 
 USAGE='Make repos consumers of this content repo and open a PR in each. Run inside the content repo:
+  npx agentspread onboard                       asks for the repos, agents and groups
   npx agentspread onboard <repo>... [--targets claudecode,codexcli] [--groups backend,web]
 <repo> is a name under the content repo'"'"'s owner, or owner/name.
 The GitHub App must have access to each repo for later sync PRs.'
@@ -36,7 +37,7 @@ Makes this repo a consumer of \`$SOURCE\`: its future releases arrive here as au
 ## Before merge
 - Review \`.agentspread/hooks.json\` and \`.agentspread/scripts/\` if present: hooks run on every developer machine.
 - If this repo had its own skills, subagents or commands, they are in \`.rulesync/\`; delete any that \`$SOURCE\` now ships and run \`npx rulesync@16 generate --delete\`.
-- Groups and agents can be changed later with \`npm run setup\` in \`$SOURCE\`.
+- Groups and agents can be changed later with \`npm run reconfigure\` in \`$SOURCE\`.
 EOF
 }
 

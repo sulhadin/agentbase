@@ -3,8 +3,10 @@ import { fileURLToPath } from 'node:url';
 import { checkbox, confirm, select } from '@inquirer/prompts';
 import { fetchTree } from './sync-consumer.mjs';
 
+// Asks for the choices behind `agentspread onboard` and `agentspread reconfigure` when they get no arguments.
+const preset = ['onboard', 'reconfigure'].find((m) => process.argv[2] === m);
 if (process.argv.includes('--help') || process.argv.includes('-h')) {
-  console.log('Usage: npx agentspread setup\n\nRun in the content repo: onboard consumer repos or reconfigure an adopted one, interactively.');
+  console.log('Usage: npx agentspread onboard | reconfigure\n\nRun in the content repo; without arguments, both ask for the repos, agents and groups.');
   process.exit(0);
 }
 
@@ -76,7 +78,7 @@ const pickGroups = (available, { current = [], autoFor = [] }) => {
     loop: false,
     choices: optional.map((g) => {
       const auto = autoFor.includes(g);
-      return { name: auto ? `${g}  (added to ${g} automatically)` : g, short: g, value: g, checked: current.includes(g), disabled: auto && 'auto' };
+      return { name: g, short: g, value: g, checked: current.includes(g), disabled: auto && `(added to ${g} automatically)` };
     }),
   }));
 };
@@ -88,7 +90,11 @@ const repos = JSON.parse(
 const tagged = repos.filter((r) => (r.repositoryTopics ?? []).some((t) => t.name === 'agentspread-consumer'));
 const adopted = new Set(tagged.filter((r) => readFile(r.name, 'rulesync.jsonc') !== null).map((r) => r.name));
 
-const mode = await ask(select({
+if (preset === 'reconfigure' && !adopted.size) {
+  console.error(`No repo has adopted ${source} yet; run npx agentspread onboard first.`);
+  process.exit(1);
+}
+const mode = preset ?? await ask(select({
   message: 'What do you want to do?',
   choices: [
     { name: 'Onboard new repos', value: 'onboard' },
@@ -117,9 +123,11 @@ if (mode === 'reconfigure') {
   const targets = [...new Set(selectedAgents.map((a) => a.target))];
 
   console.log(`
-  Repo:    ${repo} (stays on ${consumerSource} ${ref})
-  Groups:  ${currentGroups.join(', ')} → ${['common', ...selectedGroups, ...(groups.includes(repo) ? [repo] : [])].join(', ')}
-  Agents:  ${currentTargets.join(', ')} → ${targets.join(', ')}
+  Repo:        ${repo} (stays on ${consumerSource} ${ref})
+  Groups now:  ${currentGroups.join(', ')}
+  Groups new:  ${[...new Set(['common', ...selectedGroups, ...(groups.includes(repo) ? [repo] : [])])].join(', ')}
+  Agents now:  ${currentTargets.join(', ')}
+  Agents new:  ${targets.join(', ')}
   Opens or updates a PR on chore/agentspread-reconfigure.
 `);
   if (!(await ask(confirm({ message: 'Open the PR?', default: true })))) process.exit(0);
@@ -130,7 +138,7 @@ if (mode === 'reconfigure') {
   try {
     release = gh('release', 'view', '--json', 'tagName', '-q', '.tagName');
   } catch {
-    console.error(`${source} has no release yet; run Actions → release first.`);
+    console.error(`${source} has no release yet; run the release workflow from the Actions tab first.`);
     process.exit(1);
   }
   const selectedRepos = await ask(checkbox({
@@ -140,6 +148,7 @@ if (mode === 'reconfigure') {
     required: true,
     choices: repos.map((r) => ({
       name: `${r.name}${r.isPrivate ? '  (private)' : ''}`,
+      short: r.name,
       value: r.name,
       disabled: adopted.has(r.name) && 'already adopted',
     })),
