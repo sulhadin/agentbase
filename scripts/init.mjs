@@ -63,6 +63,7 @@ const walk = (dir) => {
 walk(template);
 
 console.log(`agentspread ${version}: scaffolded ${owner}/${name}\n`);
+if (!fullName) console.log(`  (not a GitHub checkout, so README.md says "${owner}"; edit it, or run init after gh repo create --clone)\n`);
 for (const file of written.sort()) console.log(`  ${file}`);
 console.log(`
 Next:

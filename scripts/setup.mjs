@@ -125,6 +125,14 @@ if (mode === 'reconfigure') {
   if (!(await ask(confirm({ message: 'Open the PR?', default: true })))) process.exit(0);
   run(script('reconfigure.sh'), [repo, '--groups', selectedGroups.join(','), '--targets', targets.join(',')]);
 } else {
+  // Read from the latest release, since that is the ref adopt.sh pins and consumers actually fetch.
+  let release;
+  try {
+    release = gh('release', 'view', '--json', 'tagName', '-q', '.tagName');
+  } catch {
+    console.error(`${source} has no release yet; run Actions → release first.`);
+    process.exit(1);
+  }
   const selectedRepos = await ask(checkbox({
     message: `Repos to feed from ${source}`,
     pageSize: 15,
@@ -138,8 +146,6 @@ if (mode === 'reconfigure') {
   }));
   const selectedAgents = await pickAgents(null);
 
-  // Read from the latest release, since that is the ref adopt.sh pins and consumers actually fetch.
-  const release = gh('release', 'view', '--json', 'tagName', '-q', '.tagName');
   const { groups } = fetchTree(source, release);
   if (!groups.includes('common')) {
     console.error(`${source} ${release} has no groups/common/; add it and cut a release before onboarding.`);

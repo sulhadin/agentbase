@@ -163,7 +163,7 @@ jobs:
             echo "$eof"
             echo "body<<$eof"
             echo "## Changelog"
-            echo "- Bump agentspread \`$OLD\` → \`$REF\`"
+            echo "- Bump \`$GITHUB_REPOSITORY\` \`$OLD\` → \`$REF\`"
             echo "- Changed: $changed"
             [ "$MIGRATED" != true ] || echo "- Moves this repo from the old agentbase setup (rulesync \`sources\` and the agentbase Claude Code plugin) to agentspread: content is committed in \`.agentspread/\`, groups are in \`agentspread.json\`, and subagents, commands and hooks are generated files; skills no longer shipped are removed."
             echo

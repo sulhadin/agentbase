@@ -15,7 +15,7 @@ jobs:
           # A project .npmrc must not be able to swap the package that runs here.
           npm_config_registry: https://registry.npmjs.org/
         run: |
-          # Only sources of this repo's own need the lockfile; agentspread's content is committed.
+          # Only this repo's own rulesync sources need the lockfile; agentspread's content is committed.
           [ ! -f rulesync.lock ] || npx --yes rulesync@16 install --frozen
           npx --yes rulesync@16 generate --delete
           # --intent-to-add makes generated files that were never committed show up in the diff.

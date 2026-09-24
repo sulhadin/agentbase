@@ -17,7 +17,9 @@ APPLY_FLAGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --groups)  APPLY_FLAGS+=(--set-groups "$2"); shift 2 ;;
+    --groups=*)  APPLY_FLAGS+=(--set-groups "${1#*=}"); shift ;;
     --targets) APPLY_FLAGS+=(--targets "$2"); shift 2 ;;
+    --targets=*) APPLY_FLAGS+=(--targets "${1#*=}"); shift ;;
     -h|--help) echo "$USAGE"; exit 0 ;;
     *) [ -z "$REPO" ] || { echo "$USAGE" >&2; exit 1; }; REPO="$1"; shift ;;
   esac

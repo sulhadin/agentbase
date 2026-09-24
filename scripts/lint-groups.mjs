@@ -113,8 +113,9 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
     process.exit(0);
   }
   const { errors, warnings } = lintGroups(process.argv[2] ?? process.cwd());
-  for (const w of warnings) console.log(`::warning::${w}`);
-  for (const e of errors) console.log(`::error::${e}`);
+  const [warn, err] = process.env.GITHUB_ACTIONS ? ['::warning::', '::error::'] : ['warning: ', 'error: '];
+  for (const w of warnings) console.log(`${warn}${w}`);
+  for (const e of errors) console.log(`${err}${e}`);
   console.log(`${errors.length} error(s), ${warnings.length} warning(s)`);
   process.exit(errors.length ? 1 : 0);
 }

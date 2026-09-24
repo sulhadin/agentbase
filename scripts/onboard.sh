@@ -35,8 +35,8 @@ Makes this repo a consumer of \`$SOURCE\`: its future releases arrive here as au
 
 ## Before merge
 - Review \`.agentspread/hooks.json\` and \`.agentspread/scripts/\` if present: hooks run on every developer machine.
-- If this repo had its own skills, they are in \`.rulesync/\`; delete any that agentspread now ships and run \`npx rulesync@16 generate --delete\`.
-- Groups and agents can be changed later with \`npx agentspread setup\` in \`$SOURCE\`.
+- If this repo had its own skills, subagents or commands, they are in \`.rulesync/\`; delete any that agentspread now ships and run \`npx rulesync@16 generate --delete\`.
+- Groups and agents can be changed later with \`npm run setup\` in \`$SOURCE\`.
 EOF
 }
 
