@@ -130,7 +130,7 @@ if (mode === 'reconfigure') {
   try {
     release = gh('release', 'view', '--json', 'tagName', '-q', '.tagName');
   } catch {
-    console.error(`${source} has no release yet; run Actions → release first.`);
+    console.error(`${source} has no release yet; run the release workflow from the Actions tab first.`);
     process.exit(1);
   }
   const selectedRepos = await ask(checkbox({

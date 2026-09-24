@@ -15,4 +15,4 @@ This repo is the engine, published to npm as `agentspread`.
 
 ## Releasing
 
-PR titles are conventional commits and PRs are squash-merged. To release, run *Actions → publish*: it computes the version, publishes to npm through [trusted publishing](https://docs.npmjs.com/trusted-publishers) (no npm token), tags and creates the GitHub release that content repos pin. Dependabot in each content repo then opens the upgrade PRs.
+PR titles are conventional commits and PRs are squash-merged. To release, run the **publish** workflow from the Actions tab. It computes the version, publishes to npm through [trusted publishing](https://docs.npmjs.com/trusted-publishers) (no npm token), tags and creates the GitHub release that content repos pin. Dependabot in each content repo then opens the upgrade PRs.

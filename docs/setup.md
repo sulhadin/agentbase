@@ -15,8 +15,8 @@ Any name works. Private is the safer default: the repo holds your agents' prompt
 | File | Purpose |
 |---|---|
 | `groups/common/` | one placeholder skill, subagent and command |
-| `.github/workflows/agentspread-release.yml` | *Actions → release*: versions, tags and rolls out |
-| `.github/workflows/agentspread-sync.yml` | *Actions → sync consumers*: rolls an existing tag out again |
+| `.github/workflows/agentspread-release.yml` | the **release** workflow: versions, tags and rolls out |
+| `.github/workflows/agentspread-sync.yml` | the **sync consumers** workflow: rolls an existing tag out again |
 | `.github/workflows/agentspread-check.yml` | lints `groups/` and PR titles |
 | `.github/dependabot.yml` | PRs when a new agentspread version is out |
 | `package.json` | pins agentspread for `npm run setup` and `npm run lint` |
@@ -45,7 +45,7 @@ Consumers pin a release, so one must exist before onboarding. Versions come from
    git tag v0.1.0 "$(git rev-list --max-parents=0 HEAD)" && git push origin v0.1.0
    ```
 3. Commit your content with a `feat` message, e.g. `feat(groups): add initial skills`, and push it to `main`.
-4. *Actions → release → Run workflow*, or `gh workflow run agentspread-release.yml --repo <org>/agentspread-config`. *Releases* then shows `v1.0.0` (or `v0.2.0`). A *nothing to release* notice means there was no `feat`, `fix`, `perf` or breaking commit since the last tag.
+4. Open the content repo's **Actions** tab, pick the **release** workflow and click **Run workflow**. Or run `gh workflow run agentspread-release.yml --repo <org>/agentspread-config`. *Releases* then shows `v1.0.0` (or `v0.2.0`). A *nothing to release* notice means there was no `feat`, `fix`, `perf` or breaking commit since the last tag.
 
 ## 5. Onboard consumer repos
 
@@ -74,4 +74,4 @@ From now on, every release opens a PR in every consumer repo it changes.
 
 ## Releasing from a branch other than `main`
 
-Set the Actions variable `RELEASE_BRANCH` in the content repo (*Settings → Secrets and variables → Actions → Variables*) and point the `release` environment's deployment branch at the same branch. The release workflow then refuses to run from any other branch.
+In the content repo, open **Settings**, then **Secrets and variables**, then **Actions**, and add a variable `RELEASE_BRANCH` on the **Variables** tab. Then point the `release` environment's deployment branch at the same branch. The release workflow then refuses to run from any other branch.

@@ -10,7 +10,7 @@ Open a PR with a conventional title (`feat(groups): add api-design`, `fix: ...`)
 
 ## Release
 
-*Actions → release → Run workflow*. The version comes from the commits since the last tag; every consumer whose content changed gets a PR.
+Open the **Actions** tab, pick the **release** workflow and click **Run workflow**. The version comes from the commits since the last tag, and every consumer repo whose content changed gets a PR.
 
 ## Onboard or reconfigure consumer repos
 
