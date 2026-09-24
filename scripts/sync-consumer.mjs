@@ -154,7 +154,8 @@ export function syncInstructions() {
   }
   if (!hasClaude || linked) return;
   const claude = readFileSync('CLAUDE.md', 'utf8');
-  const nextClaude = writeManagedBlock(claude, IMPORTS_AGENTS.test(claude) ? null : content, 'CLAUDE.md');
+  // The section itself may mention @AGENTS.md; only the repo's own text decides whether CLAUDE.md imports it.
+  const nextClaude = writeManagedBlock(claude, IMPORTS_AGENTS.test(claude.replace(BLOCK, '')) ? null : content, 'CLAUDE.md');
   if (nextClaude !== claude) writeFileSync('CLAUDE.md', nextClaude);
 }
 
@@ -305,6 +306,10 @@ function main([command, ...args]) {
       if (opts.targets?.length === 0) throw new Error('--targets needs at least one agent');
       apply(ref, source, repo, opts);
     } else if (command === 'instructions') {
+      if (args.includes('--help') || args.includes('-h')) {
+        console.log("Usage: npx agentspread instructions\n\nRun in a consumer repo: rewrites agentspread's section in AGENTS.md (and CLAUDE.md, if the repo has one) from .agentspread/.");
+        return;
+      }
       if (!existsSync(VENDOR_DIR)) throw new Error('run from a consumer root with .agentspread/');
       syncInstructions();
     } else if (command === 'summary') {

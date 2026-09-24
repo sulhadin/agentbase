@@ -35,7 +35,7 @@ jobs:
             const shared = read(".agentspread/instructions.md")?.trim() ?? null;
             const hasClaude = fs.existsSync("CLAUDE.md") && fs.statSync("CLAUDE.md").isFile();
             const same = hasClaude && fs.existsSync("AGENTS.md") && fs.realpathSync("CLAUDE.md") === fs.realpathSync("AGENTS.md");
-            const claudeWants = hasClaude && !same && !/(^|\s)@(\.\/)?AGENTS\.md(?=\s|$)/m.test(read("CLAUDE.md"));
+            const claudeWants = hasClaude && !same && !/(^|\s)@(\.\/)?AGENTS\.md(?=\s|$)/m.test(read("CLAUDE.md").replace(/^<!-- agentspread:start[^>\n]*-->[\s\S]*?^<!-- agentspread:end -->/m, ""));
             const expected = { "AGENTS.md": shared, ...(hasClaude && !same ? { "CLAUDE.md": claudeWants ? shared : null } : {}) };
             let failed = false;
             for (const [file, want] of Object.entries(expected)) {

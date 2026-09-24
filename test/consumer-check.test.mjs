@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SCRIPT = join(ROOT, 'scripts', 'sync-consumer.mjs');
+const CLI = join(ROOT, 'bin', 'agentspread.mjs');
 // The consumer check runs inline in the workflow, so it is read from there to test what consumers run.
 const workflow = readFileSync(join(ROOT, 'templates/consumer/consumer-ci.yml'), 'utf8');
 const CHECK = workflow.match(/node -e '\n([\s\S]*?)\n {10}'/)[1].replace(/^ {12}/gm, '');
@@ -33,7 +34,8 @@ const consumer = (setup = () => {}) => {
 };
 const apply = (dir, src) => spawnSync('node', [SCRIPT, 'apply', 'v1.0.0', 'acme/c', 'x', '--from', src], { cwd: dir, encoding: 'utf8' });
 const check = (dir) => spawnSync('node', ['-e', CHECK], { cwd: dir, encoding: 'utf8' });
-const heal = (dir) => spawnSync('node', [SCRIPT, 'instructions'], { cwd: dir, encoding: 'utf8' });
+// Through the CLI, since `npx agentspread instructions` is what the check tells people to run.
+const heal = (dir) => spawnSync('node', [CLI, 'instructions'], { cwd: dir, encoding: 'utf8' });
 
 const setups = {
   'no CLAUDE.md': () => {},
@@ -76,4 +78,18 @@ test('a CLAUDE.md added after sync fails the check until agentspread instruction
   assert.match(check(dir).stdout, /CLAUDE\.md: the agentspread section is not expected here/);
   assert.equal(heal(dir).status, 0);
   assert.equal(readFileSync(join(dir, 'CLAUDE.md'), 'utf8'), '@AGENTS.md\n# New\n');
+});
+
+test('instructions that mention @AGENTS.md do not make CLAUDE.md flip between sync and repair', () => {
+  const dir = consumer(setups['its own CLAUDE.md']);
+  const src = content('Keep @AGENTS.md short.\n');
+  assert.equal(apply(dir, src).status, 0);
+  const synced = readFileSync(join(dir, 'CLAUDE.md'), 'utf8');
+  assert.match(synced, /Keep @AGENTS\.md short\./);
+  assert.equal(check(dir).status, 0, check(dir).stdout);
+  const repaired = heal(dir);
+  assert.equal(repaired.status, 0, repaired.stderr);
+  assert.equal(readFileSync(join(dir, 'CLAUDE.md'), 'utf8'), synced);
+  assert.equal(apply(dir, src).status, 0);
+  assert.equal(readFileSync(join(dir, 'CLAUDE.md'), 'utf8'), synced);
 });

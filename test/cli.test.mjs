@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
@@ -27,4 +27,13 @@ test('an unknown command prints the usage instead of crashing', () => {
   const run = cli('toString');
   assert.equal(run.status, 1);
   assert.match(run.stdout, /Usage: npx agentspread <command>/);
+});
+
+test('instructions rewrites the section in the consumer it runs in', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'agentspread-cli-'));
+  mkdirSync(join(dir, '.agentspread'));
+  writeFileSync(join(dir, '.agentspread/instructions.md'), 'Shared rule.\n');
+  const run = spawnSync('node', [CLI, 'instructions'], { cwd: dir, encoding: 'utf8' });
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /Shared rule\./);
 });
