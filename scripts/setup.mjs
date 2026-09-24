@@ -117,9 +117,11 @@ if (mode === 'reconfigure') {
   const targets = [...new Set(selectedAgents.map((a) => a.target))];
 
   console.log(`
-  Repo:    ${repo} (stays on ${consumerSource} ${ref})
-  Groups:  ${currentGroups.join(', ')} → ${['common', ...selectedGroups, ...(groups.includes(repo) ? [repo] : [])].join(', ')}
-  Agents:  ${currentTargets.join(', ')} → ${targets.join(', ')}
+  Repo:        ${repo} (stays on ${consumerSource} ${ref})
+  Groups now:  ${currentGroups.join(', ')}
+  Groups new:  ${['common', ...selectedGroups, ...(groups.includes(repo) ? [repo] : [])].join(', ')}
+  Agents now:  ${currentTargets.join(', ')}
+  Agents new:  ${targets.join(', ')}
   Opens or updates a PR on chore/agentspread-reconfigure.
 `);
   if (!(await ask(confirm({ message: 'Open the PR?', default: true })))) process.exit(0);
