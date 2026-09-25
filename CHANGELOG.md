@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.1](https://github.com/sulhadin/agentspread/compare/v1.2.0...v1.2.1) (2026-09-25)
+
+### Bug Fixes
+
+* init respects private content repos and files already in the repo ([#25](https://github.com/sulhadin/agentspread/issues/25)) ([15bde72](https://github.com/sulhadin/agentspread/commit/15bde723d790d47a44749d6ef63e3bbc7395a998))
+
 ## [1.2.0](https://github.com/sulhadin/agentspread/compare/v1.1.0...v1.2.0) (2026-09-25)
 
 ### Features
