@@ -10,7 +10,7 @@ Open a PR with a conventional title (`feat(groups): add api-design`, `fix: ...`)
 
 ## Release
 
-Open the **Actions** tab, pick the **release** workflow and click **Run workflow**. The version comes from the commits since the last tag, and every consumer repo whose content changed gets a PR.
+Open the **Actions** tab, pick the **release** workflow and click **Run workflow**. The version comes from the commits since the last tag. With App delivery, every consumer repo whose content changed gets a PR; without a key (`"delivery": "pull"` in package.json), each repo gets it when its **agentspread update** workflow is run.
 
 ## Add a group
 

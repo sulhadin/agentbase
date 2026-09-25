@@ -27,14 +27,24 @@ while [ $# -gt 0 ]; do
 done
 [ ${#REPOS[@]} -gt 0 ] || { echo "$USAGE" >&2; exit 1; }
 
+DELIVERY=$(node -e 'try { console.log(require(process.cwd() + "/package.json").agentspread?.delivery ?? "app") } catch { console.log("app") }')
+if [ "$DELIVERY" = pull ]; then
+  UPDATES="- Add the \`agentspread update\` workflow: run it from the Actions tab to pull a newer \`$SOURCE\` release into this repo as a PR."
+  ARRIVE="pull a newer release with the agentspread update workflow"
+else
+  UPDATES=""
+  ARRIVE="its future releases arrive here as automated PRs"
+fi
+
 pr_body() {
   cat <<EOF
 ## Changelog
 - Copy \`$SOURCE\` \`$1\` into \`.agentspread/\` (groups in \`agentspread.json\`) and generate every chosen agent's files from it and \`.rulesync/\`.
 - Add the \`agentspread check\` drift workflow.
+$UPDATES
 
 ## Description
-Makes this repo a consumer of \`$SOURCE\`: its future releases arrive here as automated PRs.
+Makes this repo a consumer of \`$SOURCE\`: $ARRIVE.
 
 ## Before merge
 - Review \`.agentspread/hooks.json\` and \`.agentspread/scripts/\` if present: hooks run on every developer machine.

@@ -16,7 +16,7 @@ Any name works. Private is the safer default: the repo holds your agents' prompt
 |---|---|
 | `groups/common/` | one placeholder skill, subagent and command |
 | `.github/workflows/agentspread-release.yml` | the **release** workflow: versions, tags and rolls out |
-| `.github/workflows/agentspread-sync.yml` | the **sync consumers** workflow: rolls an existing tag out again |
+| `.github/workflows/agentspread-sync.yml` | the **sync consumers** workflow: rolls an existing tag out again (App delivery only) |
 | `.github/workflows/agentspread-check.yml` | lints `groups/` and PR titles |
 | `.github/dependabot.yml` | PRs when a new agentspread version is out |
 | `package.json` | pins agentspread for `npm run onboard`, `npm run reconfigure` and `npm run lint` |
@@ -28,9 +28,10 @@ The workflows call agentspread's reusable workflows at a pinned version. When a 
 
 Replace the placeholders in `groups/common/` with your own skills, subagents and commands, and add more groups if repos need different content. See [Writing groups](groups.md). `npm run lint` checks the result.
 
-## 3. Create the GitHub App
+## 3. Choose how releases reach your repos
 
-Follow [The GitHub App](github-app.md). It ends with the App installed and its key stored in the `release` environment.
+- **Through a GitHub App (default):** every release opens a PR in every consumer repo right away. Follow [The GitHub App](github-app.md); it ends with the App installed and its key stored in the `release` environment.
+- **Without an App or key:** each consumer repo pulls a release when someone runs its update workflow. The content repo must be public. Nothing to create here; see [Delivery without a key](keyless-delivery.md) for how it works. `init --delivery pull` (or picking it when `init` asks) already set this up.
 
 ## 4. Cut the first release
 

@@ -55,6 +55,20 @@ echo "▸ CI workflow"
 mkdir -p .github/workflows
 [ -f .github/workflows/agentspread-check.yml ] || cp "${ROOT}templates/consumer/consumer-ci.yml" .github/workflows/agentspread-check.yml
 
+DELIVERY=$(gh api "repos/$SOURCE/contents/package.json?ref=$REF" -q .content 2>/dev/null | base64 --decode 2>/dev/null \
+  | node -e 'let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => { try { console.log(JSON.parse(s).agentspread?.delivery ?? "app") } catch { console.log("app") } })')
+if [ "$DELIVERY" = pull ]; then
+  echo "▸ update workflow (keyless delivery: this repo pulls $SOURCE releases itself)"
+  engine=$(node -e 'console.log(require(process.argv[1]).repository.url.match(/github\.com[/:]([^/]+\/[^/.]+)/)[1])' "${ROOT}package.json")
+  sed "s#__ENGINE__#$engine#g" "${ROOT}templates/consumer/update.yml" > .github/workflows/agentspread-update.yml
+  # The update workflow opens its PR with this repo's own token, which GitHub allows only with this setting on.
+  if gh api -X PUT "repos/$OWNER/$REPO_NAME/actions/permissions/workflow" -F can_approve_pull_request_reviews=true >/dev/null 2>&1; then
+    echo "  turned on \"Allow GitHub Actions to create and approve pull requests\""
+  else
+    UPDATE_NOTE="  - turn on Settings > Actions > General > \"Allow GitHub Actions to create and approve pull requests\" (gh could not)"
+  fi
+fi
+
 echo "▸ generating agent files"
 npx --yes rulesync@16 generate --delete
 
@@ -81,6 +95,8 @@ Done. Review and commit everything, generated files included:
   - rulesync.jsonc, .github/workflows/agentspread-check.yml, generated agent folders
   - AGENTS.md, CLAUDE.md      ← agentspread's section between its markers (CLAUDE.md only if it existed); the rest is yours
   - .rulesync/                ← this repo's own skills, subagents and commands; delete any that $SOURCE now ships
+$( [ "$DELIVERY" != pull ] || echo "  - .github/workflows/agentspread-update.yml ← run it from the Actions tab to pull a newer $SOURCE release")
+${UPDATE_NOTE:-}
 Append to CODEOWNERS (use a team, e.g. @org/platform, for an organization):
 MSG
 sed "s#__ORG__#${SOURCE%%/*}#g" "${ROOT}templates/consumer/codeowners-snippet"

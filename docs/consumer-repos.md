@@ -25,7 +25,7 @@ Cursor, Copilot and OpenCode also read `.claude/skills/`, so they may list a ski
 - agentspread's section in `AGENTS.md`, and in `CLAUDE.md` if the repo has one, when the groups ship instructions ([how it works](groups.md#instructions-agentsmd)),
 - `.github/workflows/agentspread-check.yml`: regenerates everything and fails if the committed files differ.
 
-It also adds the `agentspread-consumer` topic, which is how releases find the repo.
+It also adds the `agentspread-consumer` topic, which is how releases find the repo. With [delivery without a key](keyless-delivery.md), the PR also adds `.github/workflows/agentspread-update.yml`, which pulls a release into the repo when you run it.
 
 To adopt a single repo by hand, run `npx agentspread adopt <org>/agentspread-config` from its root. It writes the files and prints a checklist; committing and opening the PR is up to you.
 

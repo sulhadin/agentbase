@@ -2,6 +2,8 @@
 
 A release rolls out to every consumer repo on its own. A manual sync rolls out a release that already exists, without cutting a new one.
 
+This is for App delivery. With [delivery without a key](keyless-delivery.md), each repo pulls releases through its own **agentspread update** workflow instead.
+
 Use it when:
 
 - you onboarded repos and want to check they receive releases,

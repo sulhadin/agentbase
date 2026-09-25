@@ -1,5 +1,7 @@
 # The GitHub App
 
+Only needed with App delivery, the default. To deliver without an App or key, see [Delivery without a key](keyless-delivery.md).
+
 A workflow's built-in `GITHUB_TOKEN` can only touch the repo it runs in. The GitHub App is the bot that pushes the release commit and tag to your content repo and opens PRs in consumer repos. You create it once per org.
 
 ## 1. Create it

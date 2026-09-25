@@ -1,4 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { checkbox, confirm, select } from '@inquirer/prompts';
 import { fetchTree } from './sync-consumer.mjs';
@@ -44,6 +45,13 @@ try {
   process.exit(1);
 }
 const [owner, contentRepo] = source.split('/');
+const delivery = (() => {
+  try {
+    return JSON.parse(readFileSync('package.json', 'utf8')).agentspread?.delivery ?? 'app';
+  } catch {
+    return 'app';
+  }
+})();
 const readFile = (repo, path) => {
   try {
     return Buffer.from(gh('api', `repos/${owner}/${repo}/contents/${path}`, '-q', '.content'), 'base64').toString('utf8');
@@ -168,8 +176,11 @@ if (mode === 'reconfigure') {
   Repos:   ${selectedRepos.join(', ')}
   Groups:  ${['common', ...selectedGroups].join(', ')} (+ a group named after each repo, if one exists)
   Writes:  ${dirs.join(', ')}
-  Each repo gets a PR on chore/adopt-agentspread. The GitHub App needs access to
-  these repos, or later release PRs will not reach them.
+  Each repo gets a PR on chore/adopt-agentspread. ${delivery === 'pull'
+    ? `It also gets an agentspread update workflow,
+  which pulls a newer release into that repo when you run it there.`
+    : `The GitHub App needs access to
+  these repos, or later release PRs will not reach them.`}
 `);
   if (!(await ask(confirm({ message: 'Open the PRs?', default: true })))) process.exit(0);
   const groupFlags = selectedGroups.length ? ['--groups', selectedGroups.join(',')] : [];
