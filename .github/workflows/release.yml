@@ -38,8 +38,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           HAS_APP: ${{ secrets.AGENTSPREAD_APP_ID != '' && secrets.AGENTSPREAD_APP_PRIVATE_KEY != '' }}
         run: |
-          delivery=$(gh api "repos/$GITHUB_REPOSITORY/contents/package.json?ref=$GITHUB_SHA" -q .content | base64 -d \
-            | jq -r '.agentspread.delivery // "app"')
+          # A content repo without package.json predates delivery modes, so it gets App delivery.
+          content=$(gh api "repos/$GITHUB_REPOSITORY/contents/package.json?ref=$GITHUB_SHA" -q .content 2>/dev/null || true)
+          delivery=$(printf '%s' "$content" | { base64 -d 2>/dev/null || true; } | jq -r '.agentspread.delivery // empty' 2>/dev/null || true)
+          delivery=${delivery:-app}
           case "$delivery" in
             app) [ "$HAS_APP" = true ] || { echo "::error::App delivery needs the AGENTSPREAD_APP_ID and AGENTSPREAD_APP_PRIVATE_KEY secrets in the release environment. For delivery without a key, set \"agentspread\": { \"delivery\": \"pull\" } in package.json."; exit 1; } ;;
             pull) ;;
