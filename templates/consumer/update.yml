@@ -1,0 +1,79 @@
+# Pulls a release of the content repo into this repo and opens a PR with it. Run it from the Actions tab:
+# agentspread update, then Run workflow. Needs no secrets: the content repo is public, and the PR is
+# opened with this repo's own token, so "Allow GitHub Actions to create and approve pull requests" must be
+# on (Settings, Actions, General).
+name: agentspread update
+on:
+  workflow_dispatch:
+    inputs:
+      ref: { description: "Content release tag to pull (empty: the latest)", type: string, required: false }
+permissions:
+  contents: write
+  pull-requests: write
+env:
+  # A project .npmrc must not be able to swap the package that runs here.
+  npm_config_registry: https://registry.npmjs.org/
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    concurrency: agentspread-update
+    steps:
+      - uses: actions/checkout@v7
+        with: { path: consumer, persist-credentials: false }
+      # The engine runs at the version the content repo pins on its default branch, as App delivery's sync
+      # does: upgrading agentspread there reaches every consumer at once, with no release and no edit here.
+      - name: Find the release and the agentspread version to run
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ inputs.ref }}
+        run: |
+          source=$(jq -r '.source // empty' consumer/agentspread.json)
+          [ -n "$source" ] || { echo "::error::agentspread.json has no source"; exit 1; }
+          ref=${REF:-$(gh release view --repo "$source" --json tagName -q .tagName)}
+          [[ "$ref" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "::error::invalid ref: $ref"; exit 1; }
+          version=$(gh api "repos/$source/contents/package.json" -q .content | base64 -d | jq -r '.devDependencies.agentspread // empty')
+          version=${version#[~^]}
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::$source does not pin agentspread to an exact version in package.json"; exit 1; }
+          echo "source=$source" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "engine=v$version" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ steps.find.outputs.source }}
+          ref: ${{ steps.find.outputs.ref }}
+          path: content
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          repository: __ENGINE__
+          ref: ${{ steps.find.outputs.engine }}
+          path: engine
+          persist-credentials: false
+      - name: Check the agentspread version supports this workflow
+        env:
+          SOURCE: ${{ steps.find.outputs.source }}
+          ENGINE: ${{ steps.find.outputs.engine }}
+        run: |
+          [ -f engine/scripts/pull.sh ] || { echo "::error::agentspread $ENGINE, pinned by $SOURCE, predates delivery without a key. Upgrade agentspread there (package.json and the uses: lines in .github/workflows)."; exit 1; }
+      - uses: actions/setup-node@v7
+        # npx needs no install, and v5+ auto-caching fails when a packageManager field has no lockfile.
+        with: { node-version: 22, package-manager-cache: false }
+      - name: Copy the release in and regenerate
+        id: pull
+        working-directory: consumer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE: ${{ steps.find.outputs.source }}
+          REF: ${{ steps.find.outputs.ref }}
+        run: bash ../engine/scripts/pull.sh
+      - uses: peter-evans/create-pull-request@v8
+        if: steps.pull.outputs.open == 'true'
+        with:
+          path: consumer
+          token: ${{ github.token }}
+          branch: chore/agentspread-sync
+          delete-branch: true
+          commit-message: ${{ steps.pull.outputs.commit }}
+          title: ${{ steps.pull.outputs.title }}
+          body: ${{ steps.pull.outputs.body }}

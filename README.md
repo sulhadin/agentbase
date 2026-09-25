@@ -41,7 +41,7 @@ You need `gh` (logged in), Node 22+, and admin rights on the org. The full walkt
    ```
    ![npx agentspread init: creates the content repo's workflows, example groups and package.json, then prints the next steps](docs/assets/init.gif)
 2. **Add your content** under `groups/`: see [Writing groups](docs/groups.md).
-3. **Create the GitHub App** that opens the PRs: see [The GitHub App](docs/github-app.md).
+3. **Choose how releases reach your repos:** create the [GitHub App](docs/github-app.md) that opens PRs everywhere on release (default), or skip it and let each repo pull releases itself ([Delivery without a key](docs/keyless-delivery.md), public content repo only).
 4. **Release:** commit with a `feat:` message, then run the **release** workflow in the content repo's Actions tab. See [Releasing](docs/releasing.md).
 5. **Onboard repos:** in the content repo, run `npm install` and then `npm run onboard`. Pick the repos, the agents they use and their groups, then merge the adoption PR each repo gets. See [Consumer repos](docs/consumer-repos.md).
 
@@ -101,6 +101,7 @@ To roll an existing release out again, to one repo or to all, without cutting a 
 | [The GitHub App](docs/github-app.md) | Creating the bot that opens the PRs, storing its key and installing it |
 | [Releasing](docs/releasing.md) | How versions are chosen, the first release, and cutting a release |
 | [Manual sync](docs/manual-sync.md) | Rolling an existing release out again, to one repo or to all |
+| [Delivery without a key](docs/keyless-delivery.md) | Letting each repo pull releases itself, with no GitHub App or secret |
 | [Consumer repos](docs/consumer-repos.md) | What a repo gets when it is onboarded, and the rules for living with it |
 | [Security](docs/security.md) | What to review before a release, and how the workflows limit access |
 | [Why agentspread over plain rulesync](docs/why-not-rulesync.md) | What agentspread adds on top of rulesync, and when rulesync alone is enough |

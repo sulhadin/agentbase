@@ -10,13 +10,14 @@ cd agentspread-config
 npx agentspread init
 ```
 
-Any name works. Private is the safer default: the repo holds your agents' prompts and hooks, and consumers need no token either way. `init` writes:
+With [delivery without a key](keyless-delivery.md), create the repo with `--public` instead: consumer repos read it with their own token.
+Any name works. With App delivery, private is the safer default: the repo holds your agents' prompts and hooks, and consumers need no token either way. `init` asks how releases should reach your repos (see step 3) and writes:
 
 | File | Purpose |
 |---|---|
 | `groups/common/` | one placeholder skill, subagent and command |
 | `.github/workflows/agentspread-release.yml` | the **release** workflow: versions, tags and rolls out |
-| `.github/workflows/agentspread-sync.yml` | the **sync consumers** workflow: rolls an existing tag out again |
+| `.github/workflows/agentspread-sync.yml` | the **sync consumers** workflow: rolls an existing tag out again (App delivery only) |
 | `.github/workflows/agentspread-check.yml` | lints `groups/` and PR titles |
 | `.github/dependabot.yml` | PRs when a new agentspread version is out |
 | `package.json` | pins agentspread for `npm run onboard`, `npm run reconfigure` and `npm run lint` |
@@ -28,9 +29,10 @@ The workflows call agentspread's reusable workflows at a pinned version. When a 
 
 Replace the placeholders in `groups/common/` with your own skills, subagents and commands, and add more groups if repos need different content. See [Writing groups](groups.md). `npm run lint` checks the result.
 
-## 3. Create the GitHub App
+## 3. Choose how releases reach your repos
 
-Follow [The GitHub App](github-app.md). It ends with the App installed and its key stored in the `release` environment.
+- **Through a GitHub App (default):** every release opens a PR in every consumer repo right away. Follow [The GitHub App](github-app.md); it ends with the App installed and its key stored in the `release` environment.
+- **Without an App or key:** each consumer repo pulls a release when someone runs its update workflow. The content repo must be public. Nothing to create here; see [Delivery without a key](keyless-delivery.md) for how it works. `init --delivery pull` (or picking it when `init` asks) already set this up.
 
 ## 4. Cut the first release
 
@@ -38,7 +40,7 @@ Consumers pin a release, so one must exist before onboarding. Follow [Releasing]
 
 ## 5. Onboard consumer repos
 
-Give the App access to them first ([step 4 of the App guide](github-app.md#4-install-it)). Then, in the content repo:
+With App delivery, give the App access to them first ([step 4 of the App guide](github-app.md#4-install-it)). Then, in the content repo:
 
 ```bash
 npm install
@@ -51,8 +53,9 @@ Non-interactive: `npx agentspread onboard web api --targets claudecode,codexcli 
 
 ## 6. Check it works
 
-Merge the adoption PRs, then roll the latest release out with a [manual sync](manual-sync.md), leaving `repo` empty. The run should list your repos under `rollout`.
+Merge the adoption PRs, then:
 
-From now on, every release opens a PR in every consumer repo it changes.
+- **App delivery:** roll the latest release out with a [manual sync](manual-sync.md), leaving `repo` empty. The run should list your repos under `rollout`. From now on, every release opens a PR in every consumer repo it changes.
+- **Without a key:** in one consumer repo, run its **agentspread update** workflow from the Actions tab. It should end with "already up to date" (the adoption PR installed the latest release). From now on, run that workflow in a repo whenever you want your latest release there.
 
 To release from a branch other than `main`, see [Releasing](releasing.md#releasing-from-a-branch-other-than-main).

@@ -40,3 +40,19 @@ test('init refuses an existing content repo and merges into an existing package.
   assert.notEqual(again.status, 0);
   assert.match(again.stderr, /looks like a content repo already/);
 });
+
+test('init --delivery pull records it and leaves out the App-only sync workflow', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'agentspread-init-'));
+  const run = init(dir, '--delivery', 'pull');
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).agentspread.delivery, 'pull');
+  assert.equal(existsSync(join(dir, '.github/workflows/agentspread-sync.yml')), false);
+  assert.ok(existsSync(join(dir, '.github/workflows/agentspread-release.yml')));
+  assert.doesNotMatch(run.stdout, /GitHub App/);
+
+  const app = mkdtempSync(join(tmpdir(), 'agentspread-init-'));
+  assert.equal(init(app).status, 0, 'app is the default without a TTY');
+  assert.equal(JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).agentspread, undefined);
+  assert.ok(existsSync(join(app, '.github/workflows/agentspread-sync.yml')));
+  assert.match(init(mkdtempSync(join(tmpdir(), 'agentspread-init-')), '--delivery', 'push').stderr, /--delivery is app or pull/);
+});

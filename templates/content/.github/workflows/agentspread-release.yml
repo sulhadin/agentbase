@@ -1,7 +1,10 @@
-# Releases this repo's groups and rolls them out to every consumer. Run it from the release branch:
-# Actions → release → Run workflow.
+# Releases this repo's groups and, with App delivery, rolls them out to every consumer. Run it from the
+# release branch: Actions tab, release, Run workflow.
 name: release
 on: workflow_dispatch
+# Keyless delivery tags and pushes the release commit with this token; App delivery uses the App's.
+permissions:
+  contents: write
 jobs:
   release:
     uses: __ENGINE__/.github/workflows/release.yml@v__VERSION__
