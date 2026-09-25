@@ -78,8 +78,13 @@ jobs:
           GIT_AUTHOR_EMAIL: agentspread-release@users.noreply.github.com
           GIT_COMMITTER_NAME: agentspread-release
           GIT_COMMITTER_EMAIL: agentspread-release@users.noreply.github.com
+          DELIVERY: ${{ steps.delivery.outputs.delivery }}
         run: |
-          ../engine/node_modules/.bin/semantic-release --extends ../engine/release.content.cjs
+          ../engine/node_modules/.bin/semantic-release --extends ../engine/release.content.cjs || {
+            # Keyless delivery pushes with GITHUB_TOKEN, which is read-only unless the caller grants more.
+            [ "$DELIVERY" != pull ] || echo "::error::With keyless delivery the release pushes with GITHUB_TOKEN. Add 'permissions: { contents: write }' to .github/workflows/agentspread-release.yml, and let GitHub Actions push to the release branch."
+            exit 1
+          }
           grep -q '^tag=' "$GITHUB_OUTPUT" || echo "::notice::No feat/fix/perf/breaking commits since the last tag — nothing to release."
   sync:
     needs: release

@@ -15,11 +15,18 @@ Pick one per content repo; every consumer repo gets releases the same way.
 
 **New content repo:** run `npx agentspread init --delivery pull`, or pick "Without an App or key" when `init` asks. Skip the GitHub App step of the [setup walkthrough](setup.md).
 
-**Existing content repo:** add this to its `package.json` and push it to `main`:
+**Existing content repo:**
 
-```json
-"agentspread": { "delivery": "pull" }
-```
+1. Add this to its `package.json`:
+   ```json
+   "agentspread": { "delivery": "pull" }
+   ```
+2. In `.github/workflows/agentspread-release.yml`, add these lines above `jobs:`, so the release can push its commit and tag with the workflow's own token:
+   ```yaml
+   permissions:
+     contents: write
+   ```
+3. Push both to `main`.
 
 Then, in each repo that is already onboarded, run `npx agentspread adopt <org>/<content repo>` once from its root and commit the result; that adds the update workflow. Repos you onboard later get it automatically.
 

@@ -55,7 +55,8 @@ echo "▸ CI workflow"
 mkdir -p .github/workflows
 [ -f .github/workflows/agentspread-check.yml ] || cp "${ROOT}templates/consumer/consumer-ci.yml" .github/workflows/agentspread-check.yml
 
-DELIVERY=$(gh api "repos/$SOURCE/contents/package.json?ref=$REF" -q .content 2>/dev/null | base64 --decode 2>/dev/null \
+# Read from the default branch, not $REF: switching delivery is usually a chore commit that cuts no release.
+DELIVERY=$({ gh api "repos/$SOURCE/contents/package.json" -q .content 2>/dev/null || true; } | base64 --decode 2>/dev/null \
   | node -e 'let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => { try { console.log(JSON.parse(s).agentspread?.delivery ?? "app") } catch { console.log("app") } })')
 if [ "$DELIVERY" = pull ]; then
   echo "▸ update workflow (keyless delivery: this repo pulls $SOURCE releases itself)"
