@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.0](https://github.com/sulhadin/agentspread/compare/v1.1.0...v1.2.0) (2026-09-25)
+
+### Features
+
+* deliver releases without a GitHub App: consumers pull them ([#24](https://github.com/sulhadin/agentspread/issues/24)) ([1ab7ae2](https://github.com/sulhadin/agentspread/commit/1ab7ae2f5a8f731690484f6e9195f533169d032e))
+
 ## [1.1.0](https://github.com/sulhadin/agentspread/compare/v1.0.0...v1.1.0) (2026-09-25)
 
 ### Features
