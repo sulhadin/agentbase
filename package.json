@@ -1,6 +1,6 @@
 {
   "name": "agentspread",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Share AI agent instructions, skills, subagents, commands and hooks across repos: one content repo, a PR in every consumer on each release.",
   "keywords": [
     "agent-skills",

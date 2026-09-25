@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0](https://github.com/sulhadin/agentspread/compare/v1.0.0...v1.1.0) (2026-09-25)
+
+### Features
+
+* npm run group creates a group with placeholder files ([#23](https://github.com/sulhadin/agentspread/issues/23)) ([8c29941](https://github.com/sulhadin/agentspread/commit/8c29941e8b3ffafa1b7667d1c5754801e9952bc9))
+* onboard and reconfigure get their own npm scripts; docs spell out every step ([#21](https://github.com/sulhadin/agentspread/issues/21)) ([bf51ee1](https://github.com/sulhadin/agentspread/commit/bf51ee1aa86ce657f4a0a4dfd97323ccb2a04c62))
+* share AGENTS.md instructions through a managed section in consumers ([#22](https://github.com/sulhadin/agentspread/issues/22)) ([9f15786](https://github.com/sulhadin/agentspread/commit/9f157868ff4d28be72cb2f94d8e989567e0727dc)), closes [#21](https://github.com/sulhadin/agentspread/issues/21)
+
+### Bug Fixes
+
+* remove template-era leftovers from the CLI and sync logic ([#18](https://github.com/sulhadin/agentspread/issues/18)) ([27d0794](https://github.com/sulhadin/agentspread/commit/27d0794209bf5ae7d82cef2432360383ff6f2c35)), closes [#17](https://github.com/sulhadin/agentspread/issues/17)
+
 ## [1.0.0](https://github.com/sulhadin/agentspread/compare/v0.3.0...v1.0.0) (2026-09-24)
 
 ### ⚠ BREAKING CHANGES
