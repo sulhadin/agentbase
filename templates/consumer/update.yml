@@ -20,9 +20,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with: { path: consumer, persist-credentials: false }
-      # The engine runs at the version the content repo pins at that release, so upgrading agentspread
-      # there upgrades every consumer too, without editing this file.
-      - name: Find the release and the agentspread version it uses
+      # The engine runs at the version the content repo pins on its default branch, as App delivery's sync
+      # does: upgrading agentspread there reaches every consumer at once, with no release and no edit here.
+      - name: Find the release and the agentspread version to run
         id: find
         env:
           GH_TOKEN: ${{ github.token }}
@@ -32,9 +32,9 @@ jobs:
           [ -n "$source" ] || { echo "::error::agentspread.json has no source"; exit 1; }
           ref=${REF:-$(gh release view --repo "$source" --json tagName -q .tagName)}
           [[ "$ref" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "::error::invalid ref: $ref"; exit 1; }
-          version=$(gh api "repos/$source/contents/package.json?ref=$ref" -q .content | base64 -d | jq -r '.devDependencies.agentspread // empty')
+          version=$(gh api "repos/$source/contents/package.json" -q .content | base64 -d | jq -r '.devDependencies.agentspread // empty')
           version=${version#[~^]}
-          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::$source $ref does not pin agentspread to an exact version in package.json"; exit 1; }
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::$source does not pin agentspread to an exact version in package.json"; exit 1; }
           echo "source=$source" >> "$GITHUB_OUTPUT"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
           echo "engine=v$version" >> "$GITHUB_OUTPUT"
@@ -50,6 +50,12 @@ jobs:
           ref: ${{ steps.find.outputs.engine }}
           path: engine
           persist-credentials: false
+      - name: Check the agentspread version supports this workflow
+        env:
+          SOURCE: ${{ steps.find.outputs.source }}
+          ENGINE: ${{ steps.find.outputs.engine }}
+        run: |
+          [ -f engine/scripts/pull.sh ] || { echo "::error::agentspread $ENGINE, pinned by $SOURCE, predates delivery without a key. Upgrade agentspread there (package.json and the uses: lines in .github/workflows)."; exit 1; }
       - uses: actions/setup-node@v7
         # npx needs no install, and v5+ auto-caching fails when a packageManager field has no lockfile.
         with: { node-version: 22, package-manager-cache: false }

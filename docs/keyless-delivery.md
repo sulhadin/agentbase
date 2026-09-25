@@ -17,16 +17,17 @@ Pick one per content repo; every consumer repo gets releases the same way.
 
 **Existing content repo:**
 
-1. Add this to its `package.json`:
+1. Upgrade agentspread to the latest version: the `agentspread` version in `package.json` and the `@v…` at the end of each `uses:` line in `.github/workflows/agentspread-*.yml`. Older versions don't know this mode.
+2. Add this to its `package.json`:
    ```json
    "agentspread": { "delivery": "pull" }
    ```
-2. In `.github/workflows/agentspread-release.yml`, add these lines above `jobs:`, so the release can push its commit and tag with the workflow's own token:
+3. In `.github/workflows/agentspread-release.yml`, add these lines above `jobs:`, so the release can push its commit and tag with the workflow's own token:
    ```yaml
    permissions:
      contents: write
    ```
-3. Push both to `main`.
+4. Push all of it to `main`.
 
 Then, in each repo that is already onboarded, run `npx agentspread adopt <org>/<content repo>` once from its root and commit the result; that adds the update workflow. Repos you onboard later get it automatically.
 
@@ -38,7 +39,7 @@ The content repo must be public: consumer repos read it with their own token, wh
 2. In the consumer repo on GitHub, open the **Actions** tab.
 3. Pick the **agentspread update** workflow and click **Run workflow**. Leave `ref` empty for the latest release, or enter a tag.
 
-The workflow copies that release into `.agentspread/`, regenerates the agent files and opens a `chore/agentspread-sync` PR in that repo (or updates the open one). It runs the agentspread version the content repo pins at that release, so upgrading agentspread in the content repo upgrades it for every consumer.
+The workflow copies that release into `.agentspread/`, regenerates the agent files and opens a `chore/agentspread-sync` PR in that repo (or updates the open one). It takes the content from that release, and runs the agentspread version the content repo's `main` pins, so upgrading agentspread there upgrades it for every consumer at once.
 
 ## What to know
 
