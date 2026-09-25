@@ -33,7 +33,11 @@ OWNER=$(gh repo view --json owner -q .owner.login 2>/dev/null || echo "${SOURCE%
 work=$(mktemp -d)
 json_list() { printf '"%s"' "${1//,/\", \"}"; }
 
-if [ ! -d .rulesync ]; then
+# An adopted repo's agent folders hold what agentspread generated; importing them would copy the shared
+# content into .rulesync/, where it would shadow every later release.
+if [ -f agentspread.json ]; then
+  echo "▸ already adopted: keeping .rulesync/ as it is"
+elif [ ! -d .rulesync ]; then
   echo "▸ importing this repo's existing skills, subagents and commands into .rulesync/"
   for t in ${TARGETS//,/ }; do
     npx --yes rulesync@16 import --targets "$t" --features skills,subagents,commands || true
