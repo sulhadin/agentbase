@@ -34,7 +34,7 @@ for (let i = 0; i < args.length; i++) {
   if (arg === '--parts' || arg.startsWith('--parts=')) {
     if (parts) fail('give --parts once, as a comma-separated list');
     const value = arg === '--parts' ? args[++i] : arg.slice('--parts='.length);
-    parts = (value ?? '').split(',').map((p) => p.trim()).filter(Boolean);
+    parts = [...new Set((value ?? '').split(',').map((p) => p.trim()).filter(Boolean))];
     if (!parts.length) fail(`--parts needs at least one of ${Object.keys(PARTS).join(', ')}`);
   } else if (arg.startsWith('-')) {
     fail(`unknown option ${arg}\n\n${USAGE}`);
