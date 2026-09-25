@@ -13,7 +13,7 @@ if (process.argv.includes('--help') || process.argv.includes('-h')) {
 
 Scaffolds a content repo in the current directory.
   --delivery app   releases open PRs in consumer repos through a GitHub App (default)
-  --delivery pull  no App or key: each consumer repo pulls releases itself; the content repo must be public
+  --delivery pull  no App or key: each consumer repo pulls releases itself; works only with a public content repo
   --force          overwrites files that already exist`);
   process.exit(0);
 }
@@ -43,25 +43,38 @@ if (!force && existsSync(join(cwd, 'groups'))) {
   process.exit(1);
 }
 
+// Keyless consumers read this repo with their own token, which can't see another private repo, so a
+// private content repo can only deliver through the App.
+const isPrivate = tryRun('gh', ['repo', 'view', '--json', 'isPrivate', '-q', '.isPrivate']) === 'true';
+if (deliveryArg === 'pull' && isPrivate) {
+  console.error(`✗ ${owner}/${name} is private, and delivery without a key works only with a public content repo:
+  consumer repos read it with their own token, which can't see other private repos.
+  For a private content repo, use App delivery: npx agentspread init --delivery app`);
+  process.exit(1);
+}
+
 const delivery = deliveryArg ?? (process.stdin.isTTY
   ? await select({
     message: 'How should releases reach your consumer repos?',
     choices: [
       { name: 'Through a GitHub App: a PR in every repo as soon as you release (you create the App once)', value: 'app' },
-      { name: 'Without an App or key: each repo pulls a release when you run its update workflow (public content repo only)', value: 'pull' },
+      {
+        name: 'Without an App or key: each repo pulls a release when you run its update workflow',
+        value: 'pull',
+        disabled: isPrivate && '(needs a public content repo; this one is private)',
+      },
     ],
   }).catch((err) => {
     if (err?.name === 'ExitPromptError') process.exit(130);
     throw err;
   })
   : 'app');
-// Consumers pull through their own token, which can read only public repos.
-const isPrivate = delivery === 'pull' && tryRun('gh', ['repo', 'view', '--json', 'isPrivate', '-q', '.isPrivate']) === 'true';
 
 const template = join(root, 'templates', 'content');
 const fill = (text) =>
   text.replaceAll('__ENGINE__', engine).replaceAll('__VERSION__', version).replaceAll('__NAME__', name).replaceAll('__OWNER__', owner);
 const written = [];
+const kept = [];
 const walk = (dir) => {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const src = join(dir, entry.name);
@@ -80,7 +93,9 @@ const walk = (dir) => {
     } else if (rel === '.gitignore' && existsSync(dest)) {
       const current = readFileSync(dest, 'utf8');
       if (!/^node_modules\/?$/m.test(current)) writeFileSync(dest, `${current.replace(/\n?$/, '\n')}node_modules/\n`);
-    } else if (existsSync(dest) && rel === 'README.md' && !force) {
+    } else if (existsSync(dest) && !force) {
+      // A repo's own README, dependabot.yml or workflows must not be replaced silently.
+      kept.push(rel);
       continue;
     } else {
       cpSync(src, dest, { recursive: true });
@@ -100,6 +115,10 @@ if (delivery === 'pull') {
 console.log(`agentspread ${version}: scaffolded ${owner}/${name}\n`);
 if (!fullName) console.log(`  (not a GitHub checkout, so README.md says "${owner}"; edit it, or run init after gh repo create --clone)\n`);
 for (const file of written.sort()) console.log(`  ${file}`);
+if (kept.length) {
+  console.log('\n  Kept as they were (already here; --force replaces them):');
+  for (const file of kept.sort()) console.log(`  ${file}`);
+}
 if (delivery === 'app') {
   console.log(`
 Next:
@@ -115,7 +134,6 @@ Next:
   5. npm install && npm run onboard, to pick the repos that consume it.
 `);
 } else {
-  if (isPrivate) console.log(`\n  ✗ ${owner}/${name} is private. Consumer repos can't read it without a key; make it public first.`);
   console.log(`
 Next (delivery without an App or key):
   1. Replace the placeholders in groups/common/ with your content, then commit with a feat: message

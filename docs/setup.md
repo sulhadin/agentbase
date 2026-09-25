@@ -10,7 +10,7 @@ cd agentspread-config
 npx agentspread init
 ```
 
-With [delivery without a key](keyless-delivery.md), create the repo with `--public` instead: consumer repos read it with their own token.
+[Delivery without a key](keyless-delivery.md) works only with a public content repo; for a private one, `init` offers App delivery only.
 Any name works. With App delivery, private is the safer default: the repo holds your agents' prompts and hooks, and consumers need no token either way. `init` asks how releases should reach your repos (see step 3) and writes:
 
 | File | Purpose |
@@ -32,7 +32,7 @@ Replace the placeholders in `groups/common/` with your own skills, subagents and
 ## 3. Choose how releases reach your repos
 
 - **Through a GitHub App (default):** every release opens a PR in every consumer repo right away. Follow [The GitHub App](github-app.md); it ends with the App installed and its key stored in the `release` environment.
-- **Without an App or key:** each consumer repo pulls a release when someone runs its update workflow. The content repo must be public. Nothing to create here; see [Delivery without a key](keyless-delivery.md) for how it works. `init --delivery pull` (or picking it when `init` asks) already set this up.
+- **Without an App or key:** each consumer repo pulls a release when someone runs its update workflow. Works only with a public content repo. Nothing to create here; see [Delivery without a key](keyless-delivery.md) for how it works. `init --delivery pull` (or picking it when `init` asks) already set this up.
 
 ## 4. Cut the first release
 
