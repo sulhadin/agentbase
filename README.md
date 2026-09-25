@@ -62,6 +62,18 @@ Or from a terminal: `gh workflow run agentspread-release.yml`.
 
 The workflow computes the next version from the commits since the last tag, updates `CHANGELOG.md`, tags the release, and opens or updates a `chore/agentspread-sync` PR in every consumer repo whose content changed. If there is nothing to release, it stops with a notice. Details in [Releasing](docs/releasing.md).
 
+### Add a group
+
+1. In the content repo, run `npm run group`.
+2. Choose who it is for: several repos (a category such as `backend`) or one repo (it is named after that repo and reaches it automatically).
+3. Type the name, or pick the repo, and tick what it should start with.
+4. Fill in the placeholder files it creates, then open a `feat:` PR and cut a release.
+5. For a category group, add it to repos with `npm run reconfigure`.
+
+![npm run group: choose a category group, name it, pick its parts, see the files it created](docs/assets/group.gif)
+
+What goes into a group is described in [Writing groups](docs/groups.md).
+
 ### Change a repo's groups or agents
 
 1. In the content repo, run `npm run reconfigure`.

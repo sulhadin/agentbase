@@ -1,5 +1,5 @@
 {
   "name": "agentspread-config",
   "private": true,
-  "scripts": { "onboard": "agentspread onboard", "reconfigure": "agentspread reconfigure" }
+  "scripts": { "onboard": "agentspread onboard", "reconfigure": "agentspread reconfigure", "group": "agentspread group" }
 }

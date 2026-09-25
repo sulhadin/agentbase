@@ -14,6 +14,7 @@ const COMMANDS = {
   onboard: { runner: 'bash', script: 'scripts/onboard.sh', about: 'add consumer repos; asks which ones when called without any (run in the content repo)' },
   reconfigure: { runner: 'bash', script: 'scripts/reconfigure.sh', about: "change a consumer's groups or agents; asks when called without a repo (run in the content repo)" },
   adopt: { runner: 'bash', script: 'scripts/adopt.sh', about: 'adopt the current repo as a consumer of a content repo' },
+  group: { runner: 'node', script: 'scripts/group.mjs', about: 'add a group with placeholder files; asks when called without a name (run in the content repo)' },
   lint: { runner: 'node', script: 'scripts/lint-groups.mjs', about: 'check groups/ in a content repo' },
   instructions: {
     runner: 'node', script: 'scripts/sync-consumer.mjs', preset: ['instructions'],

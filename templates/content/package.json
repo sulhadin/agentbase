@@ -5,6 +5,7 @@
   "scripts": {
     "onboard": "agentspread onboard",
     "reconfigure": "agentspread reconfigure",
+    "group": "agentspread group",
     "lint": "agentspread lint"
   },
   "devDependencies": {

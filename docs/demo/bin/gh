@@ -22,7 +22,8 @@ if (args.startsWith('repo create')) {
   const name = args.split(' ')[2].split('/').pop();
   require('node:fs').mkdirSync(name, { recursive: true });
   out = `✓ Created repository acme/${name} on github.com\n  https://github.com/acme/${name}`;
-} else if (args.startsWith('repo view')) out = 'acme/agentspread-config';
+} else if (args.startsWith('repo view')) out = args.includes('.owner.login') ? 'acme' : 'acme/agentspread-config';
+else if (args.startsWith('repo list') && args.includes('--topic')) out = repos.filter((r) => r.repositoryTopics).map((r) => r.name).join('\n');
 else if (args.startsWith('release view')) out = 'v1.4.0';
 else if (args.startsWith('repo list')) out = JSON.stringify(repos);
 else if (/^api repos\/acme\/[^/]+\/git\/trees\//.test(args)) out = tree.join('\n');

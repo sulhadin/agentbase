@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 const REQUIRED = [
   'bin/agentspread.mjs',
   'release.content.cjs',
-  'scripts/init.mjs', 'scripts/setup.mjs', 'scripts/sync-consumer.mjs', 'scripts/lint-groups.mjs',
+  'scripts/init.mjs', 'scripts/setup.mjs', 'scripts/group.mjs', 'scripts/sync-consumer.mjs', 'scripts/lint-groups.mjs',
   'scripts/adopt.sh', 'scripts/onboard.sh', 'scripts/reconfigure.sh',
   'templates/consumer/rulesync.jsonc', 'templates/consumer/consumer-ci.yml', 'templates/consumer/codeowners-snippet',
   'templates/content/package.json', 'templates/content/gitignore', 'templates/content/README.md',

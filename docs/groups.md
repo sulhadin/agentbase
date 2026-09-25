@@ -17,6 +17,7 @@ groups/
 
 - `common` is required and reaches every consumer. Other groups are picked per repo when onboarding; a repo can be in several.
 - A group named exactly like a repo attaches to that repo automatically, even if you create it later. Use it for things that belong to one repo only, and don't name a category group after a repo.
+- `npm run group` in the content repo creates a group with placeholder files; see [the README](../README.md#add-a-group).
 - A group can have any mix of the parts. Group and skill names must be lowercase kebab-case; use the same style for subagents and commands. Skill, subagent and command names must be unique across groups.
 
 ## Skills
