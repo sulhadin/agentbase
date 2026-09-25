@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
@@ -55,4 +55,27 @@ test('init --delivery pull records it and leaves out the App-only sync workflow'
   assert.equal(JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).agentspread, undefined);
   assert.ok(existsSync(join(app, '.github/workflows/agentspread-sync.yml')));
   assert.match(init(mkdtempSync(join(tmpdir(), 'agentspread-init-')), '--delivery', 'push').stderr, /--delivery is app or pull/);
+});
+
+test('init --delivery pull stops before writing anything when the content repo is private', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'agentspread-init-'));
+  const bin = mkdtempSync(join(tmpdir(), 'agentspread-bin-'));
+  writeFileSync(join(bin, 'gh'), `#!/bin/sh\ncase "$*" in *isPrivate*) echo true ;; *) echo acme/private-config ;; esac\n`);
+  chmodSync(join(bin, 'gh'), 0o755);
+  const run = spawnSync('node', [CLI, 'init', '--delivery', 'pull'], { cwd: dir, encoding: 'utf8', env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } });
+  assert.equal(run.status, 1);
+  assert.match(run.stderr, /works only with a public content repo/);
+  assert.match(run.stderr, /npx agentspread init --delivery app/);
+  assert.doesNotMatch(run.stderr, /make it public/);
+  assert.deepEqual(readdirSync(dir), []);
+});
+
+test('init keeps files the repo already has, and says so', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'agentspread-init-'));
+  mkdirSync(join(dir, '.github'), { recursive: true });
+  writeFileSync(join(dir, '.github/dependabot.yml'), 'version: 2\nupdates: []\n');
+  const run = init(dir);
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(readFileSync(join(dir, '.github/dependabot.yml'), 'utf8'), 'version: 2\nupdates: []\n');
+  assert.match(run.stdout, /Kept as they were[\s\S]*\.github\/dependabot\.yml/);
 });

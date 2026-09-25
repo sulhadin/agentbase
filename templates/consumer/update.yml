@@ -1,7 +1,7 @@
 # Pulls a release of the content repo into this repo and opens a PR with it. Run it from the Actions tab:
-# agentspread update, then Run workflow. Needs no secrets: the content repo is public, and the PR is
-# opened with this repo's own token, so "Allow GitHub Actions to create and approve pull requests" must be
-# on (Settings, Actions, General).
+# agentspread update, then Run workflow. Needs no secrets: keyless delivery requires a public content repo,
+# and the PR is opened with this repo's own token, so "Allow GitHub Actions to create and approve pull
+# requests" must be on (Settings, Actions, General).
 name: agentspread update
 on:
   workflow_dispatch:

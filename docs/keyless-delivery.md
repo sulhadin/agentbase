@@ -6,7 +6,7 @@ By default a release reaches consumer repos through a [GitHub App](github-app.md
 |---|---|---|
 | What you set up | an App, its key in a `release` environment | nothing |
 | When a release reaches a repo | right after the release, in every repo | when someone runs that repo's **agentspread update** workflow |
-| Content repo | public or private | must be public |
+| Content repo | public or private | public only |
 | Checks on the update PR | run as usual | don't run (see below) |
 
 Pick one per content repo; every consumer repo gets releases the same way.
@@ -31,7 +31,7 @@ Pick one per content repo; every consumer repo gets releases the same way.
 
 Then, in each repo that is already onboarded, run `npx agentspread adopt <org>/<content repo>` once from its root and commit the result; that adds the update workflow. Repos you onboard later get it automatically.
 
-The content repo must be public: consumer repos read it with their own token, which can't see other private repos.
+This works only with a public content repo: consumer repos read it with their own token, which can't see other private repos. For a private content repo, use App delivery; `init` doesn't offer keyless delivery for one.
 
 ## Get a release into a repo
 
